@@ -1,17 +1,38 @@
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useMutation } from "@tanstack/react-query";
 import { useLocation } from "wouter";
 import { useState } from "react";
+import { useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { z } from "zod";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
+  Form,
+  FormControl,
+  FormField,
+  FormItem,
+  FormLabel,
+  FormMessage,
+} from "@/components/ui/form";
 import {
   Dialog,
   DialogContent,
   DialogDescription,
   DialogHeader,
   DialogTitle,
+  DialogTrigger,
 } from "@/components/ui/dialog";
 import {
   Home,
@@ -25,6 +46,10 @@ import {
   Camera,
   MapPin,
   Video,
+  Plus,
+  Pencil,
+  Trash2,
+  Calendar,
 } from "lucide-react";
 import {
   LineChart,
@@ -37,12 +62,29 @@ import {
   AreaChart,
   Area,
 } from "recharts";
-import type { Alert, User, House, Device } from "@shared/schema";
+import { useToast } from "@/hooks/use-toast";
+import { apiRequest, queryClient } from "@/lib/queryClient";
+import type { Alert, User, House, Device, MaintenanceRecord } from "@shared/schema";
+
+const maintenanceFormSchema = z.object({
+  task: z.string().min(1, "Task is required"),
+  scheduledDate: z.string().min(1, "Date is required"),
+  category: z.enum(["database", "server", "network", "security", "hardware", "software", "other"]),
+  priority: z.enum(["low", "medium", "high", "critical"]),
+  status: z.enum(["scheduled", "in_progress", "completed", "cancelled"]).default("scheduled"),
+  description: z.string().optional(),
+  assignedTo: z.string().optional(),
+});
+
+type MaintenanceFormValues = z.infer<typeof maintenanceFormSchema>;
 
 export default function CloudStaffDashboard() {
   const [, setLocation] = useLocation();
+  const { toast } = useToast();
   const [selectedHouse, setSelectedHouse] = useState<House | null>(null);
   const [isHouseDialogOpen, setIsHouseDialogOpen] = useState(false);
+  const [isMaintenanceDialogOpen, setIsMaintenanceDialogOpen] = useState(false);
+  const [editingMaintenance, setEditingMaintenance] = useState<MaintenanceRecord | null>(null);
   
   const { data: alerts, isLoading: alertsLoading } = useQuery<Alert[]>({
     queryKey: ["/api/alerts/recent"],

@@ -12,10 +12,11 @@ import { Badge } from "@/components/ui/badge";
 import { SidebarTrigger } from "@/components/ui/sidebar";
 import { Bell, LogOut, User, Settings } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
-import { Link } from "wouter";
+import { Link, useLocation } from "wouter";
 
 export function Header() {
   const { user } = useAuth();
+  const [, setLocation] = useLocation();
 
   return (
     <header className="sticky top-0 z-50 flex h-14 items-center gap-4 border-b bg-background px-6">
@@ -23,7 +24,13 @@ export function Header() {
       
       <div className="flex-1" />
 
-      <Button variant="ghost" size="icon" className="relative" data-testid="button-notifications">
+      <Button 
+        variant="ghost" 
+        size="icon" 
+        className="relative" 
+        data-testid="button-notifications"
+        onClick={() => setLocation("/alerts")}
+      >
         <Bell className="h-5 w-5" />
         <Badge className="absolute -top-1 -right-1 h-5 w-5 p-0 flex items-center justify-center text-xs">
           3
