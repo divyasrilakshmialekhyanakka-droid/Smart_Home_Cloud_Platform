@@ -34,21 +34,28 @@ import {
 import { useState } from "react";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
-import type { Device, InsertDevice } from "@shared/schema";
+import type { Device, InsertDevice, House } from "@shared/schema";
 
 export default function DeviceManagement() {
   const { toast } = useToast();
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
+  const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
+  const [selectedDevice, setSelectedDevice] = useState<Device | null>(null);
   const [newDevice, setNewDevice] = useState<Partial<InsertDevice>>({
     name: "",
     type: "camera",
     room: "",
     status: "offline",
+    houseId: "",
   });
 
   const { data: devices, isLoading } = useQuery<Device[]>({
     queryKey: ["/api/devices"],
+  });
+
+  const { data: houses } = useQuery<House[]>({
+    queryKey: ["/api/houses"],
   });
 
   const addDeviceMutation = useMutation({
@@ -58,10 +65,25 @@ export default function DeviceManagement() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/devices"] });
       setIsAddDialogOpen(false);
-      setNewDevice({ name: "", type: "camera", room: "", status: "offline" });
+      setNewDevice({ name: "", type: "camera", room: "", status: "offline", houseId: "" });
       toast({
         title: "Device Added",
         description: "The device has been successfully registered.",
+      });
+    },
+  });
+
+  const updateDeviceMutation = useMutation({
+    mutationFn: async (device: { id: string; data: Partial<InsertDevice> }) => {
+      await apiRequest("PATCH", `/api/devices/${device.id}`, device.data);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/devices"] });
+      setIsEditDialogOpen(false);
+      setSelectedDevice(null);
+      toast({
+        title: "Device Updated",
+        description: "The device has been successfully updated.",
       });
     },
   });
@@ -154,6 +176,24 @@ export default function DeviceManagement() {
                 </Select>
               </div>
               <div className="space-y-2">
+                <Label htmlFor="device-house">House</Label>
+                <Select
+                  value={newDevice.houseId}
+                  onValueChange={(value) => setNewDevice({ ...newDevice, houseId: value })}
+                >
+                  <SelectTrigger id="device-house" data-testid="select-device-house">
+                    <SelectValue placeholder="Select a house" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {houses?.map((house) => (
+                      <SelectItem key={house.id} value={house.id}>
+                        {house.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-2">
                 <Label htmlFor="device-room">Room/Location</Label>
                 <Input
                   id="device-room"
@@ -184,7 +224,7 @@ export default function DeviceManagement() {
               </Button>
               <Button
                 onClick={() => addDeviceMutation.mutate(newDevice)}
-                disabled={!newDevice.name || !newDevice.room || addDeviceMutation.isPending}
+                disabled={!newDevice.name || !newDevice.room || !newDevice.houseId || addDeviceMutation.isPending}
                 data-testid="button-save-device"
               >
                 {addDeviceMutation.isPending ? "Adding..." : "Add Device"}
@@ -193,6 +233,136 @@ export default function DeviceManagement() {
           </DialogContent>
         </Dialog>
       </div>
+
+      {/* Edit Device Dialog */}
+      <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
+        <DialogContent data-testid="dialog-edit-device">
+          <DialogHeader>
+            <DialogTitle>Edit Device</DialogTitle>
+            <DialogDescription>
+              Update device configuration and settings
+            </DialogDescription>
+          </DialogHeader>
+          {selectedDevice && (
+            <div className="space-y-4 py-4">
+              <div className="space-y-2">
+                <Label htmlFor="edit-device-name">Device Name</Label>
+                <Input
+                  id="edit-device-name"
+                  value={selectedDevice.name}
+                  onChange={(e) => setSelectedDevice({ ...selectedDevice, name: e.target.value })}
+                  data-testid="input-edit-device-name"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="edit-device-type">Device Type</Label>
+                <Select
+                  value={selectedDevice.type}
+                  onValueChange={(value) => setSelectedDevice({ ...selectedDevice, type: value as any })}
+                >
+                  <SelectTrigger id="edit-device-type" data-testid="select-edit-device-type">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="camera">Camera</SelectItem>
+                    <SelectItem value="microphone">Microphone</SelectItem>
+                    <SelectItem value="motion_sensor">Motion Sensor</SelectItem>
+                    <SelectItem value="thermostat">Thermostat</SelectItem>
+                    <SelectItem value="lock">Lock</SelectItem>
+                    <SelectItem value="light">Light</SelectItem>
+                    <SelectItem value="smoke_detector">Smoke Detector</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="edit-device-house">House</Label>
+                <Select
+                  value={selectedDevice.houseId}
+                  onValueChange={(value) => setSelectedDevice({ ...selectedDevice, houseId: value })}
+                >
+                  <SelectTrigger id="edit-device-house" data-testid="select-edit-device-house">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {houses?.map((house) => (
+                      <SelectItem key={house.id} value={house.id}>
+                        {house.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="edit-device-room">Room/Location</Label>
+                <Input
+                  id="edit-device-room"
+                  value={selectedDevice.room}
+                  onChange={(e) => setSelectedDevice({ ...selectedDevice, room: e.target.value })}
+                  data-testid="input-edit-device-room"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="edit-device-status">Status</Label>
+                <Select
+                  value={selectedDevice.status}
+                  onValueChange={(value) => setSelectedDevice({ ...selectedDevice, status: value as any })}
+                >
+                  <SelectTrigger id="edit-device-status" data-testid="select-edit-device-status">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="online">Online</SelectItem>
+                    <SelectItem value="offline">Offline</SelectItem>
+                    <SelectItem value="warning">Warning</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="edit-serial-number">Serial Number</Label>
+                <Input
+                  id="edit-serial-number"
+                  value={selectedDevice.serialNumber || ""}
+                  onChange={(e) => setSelectedDevice({ ...selectedDevice, serialNumber: e.target.value })}
+                  data-testid="input-edit-serial-number"
+                />
+              </div>
+            </div>
+          )}
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => {
+                setIsEditDialogOpen(false);
+                setSelectedDevice(null);
+              }}
+              data-testid="button-cancel-edit"
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={() => {
+                if (selectedDevice) {
+                  updateDeviceMutation.mutate({
+                    id: selectedDevice.id,
+                    data: {
+                      name: selectedDevice.name,
+                      type: selectedDevice.type,
+                      houseId: selectedDevice.houseId,
+                      room: selectedDevice.room,
+                      status: selectedDevice.status,
+                      serialNumber: selectedDevice.serialNumber,
+                    },
+                  });
+                }
+              }}
+              disabled={!selectedDevice || updateDeviceMutation.isPending}
+              data-testid="button-save-edit"
+            >
+              {updateDeviceMutation.isPending ? "Saving..." : "Save Changes"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* Search and Filters */}
       <Card>
@@ -279,6 +449,10 @@ export default function DeviceManagement() {
                       variant="ghost"
                       size="icon"
                       className="h-8 w-8"
+                      onClick={() => {
+                        setSelectedDevice(device);
+                        setIsEditDialogOpen(true);
+                      }}
                       data-testid={`button-configure-${device.id}`}
                     >
                       <SettingsIcon className="h-4 w-4" />
