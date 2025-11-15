@@ -1,0 +1,23 @@
+This project requires students to work together as a team to develop and implement a smart cloud platform for smart homes and senior care houses and communities. For this project, we only focus on individual senior houses using the provide big data and machine learning models.
+Please check my posted option #1 project PPTs. (posted in the attachment)
+Background:
+
+This project is designed and build an intelligent cloud platform for smart homes to provide remote/global smart home surveillance based on audio/video big data and provided machine learning models to achieve the following intelligent service objectives:
+- Collect and learning each house audio/video data and learn senior residents' life patterns.
+- Detect/classify audio-based sound from each house for emergency, safety, security concerns.    
+- Detect/recognize residents/animal sounds
+- Generate different types of alerts for remote parties （family members/security people/emergency handling parties）
+Cloud Project Requirements:
+Your cloud platform must support the following user groups:
+- House owners – They are able to configure/subscribe services.
+- Edge-based IOT and devices team - They are available to add/delete/update/configure/control different IOT devices （camera/audio） for each room/house, including Wi-Fi network connectivity.
+- Could service staff - They are available to use cloud-based system dashboard to manage, monitor, and maintain all of connected houses, connectivity, and AI service models, as well as alerts.
+If your team selects this project option, you team must select, complete, and built the following components:
+- System dashboard – This component supports the system and user interactions with diverse
+system statistics reports.
+- Home-based IOT device manager – This component supports add/update/connect/control different IOT devices, including states, configuration, and connectivity.
+- Alert tracking and monitor – This component tracks and monitors diverse AI-powered alerts and states.
+- System database management – This component provides diverse DB management services and functions for cloud-based platform system data records, including house information and related IOT records as well as alters.
+For each house, you need to build a simple data management component which manages and maintains the IOT device data for each house.
+Deployment requirements:
+Your project outcome must be deployed on Amazon EC2 to demonstrate your project.
