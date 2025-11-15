@@ -264,10 +264,10 @@ export default function AlertsPage() {
                 <div className="col-span-1">Severity</div>
                 <div className="col-span-2">Type</div>
                 <div className="col-span-1">Device ID</div>
-                <div className="col-span-2">Location</div>
+                <div className="col-span-1">Location</div>
                 <div className="col-span-2">AI Anomaly Details</div>
                 <div className="col-span-1">Status</div>
-                <div className="col-span-1 text-right">Actions</div>
+                <div className="col-span-2 text-right">Actions</div>
               </div>
 
               {/* Table Rows */}
@@ -291,7 +291,7 @@ export default function AlertsPage() {
                   <div className="col-span-1 font-mono text-xs">
                     {alert.deviceId ? alert.deviceId.slice(0, 8) : "-"}
                   </div>
-                  <div className="col-span-2">{alert.location}</div>
+                  <div className="col-span-1">{alert.location}</div>
                   <div className="col-span-2 text-xs text-muted-foreground">
                     {alert.aiDetails
                       ? JSON.stringify(alert.aiDetails).slice(0, 30) + "..."
@@ -302,7 +302,7 @@ export default function AlertsPage() {
                       {alert.status}
                     </Badge>
                   </div>
-                  <div className="col-span-1 flex gap-1 justify-end">
+                  <div className="col-span-2 flex gap-1 justify-end">
                     {alert.status === "new" && (
                       <>
                         <Button
