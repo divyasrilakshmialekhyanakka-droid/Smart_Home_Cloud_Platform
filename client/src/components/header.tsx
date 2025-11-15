@@ -1,3 +1,4 @@
+import { useQuery } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import {
@@ -13,10 +14,19 @@ import { SidebarTrigger } from "@/components/ui/sidebar";
 import { Bell, LogOut, User, Settings } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
 import { Link, useLocation } from "wouter";
+import type { Alert } from "@shared/schema";
 
 export function Header() {
   const { user } = useAuth();
   const [, setLocation] = useLocation();
+
+  // Fetch alerts to get pending count
+  const { data: alerts } = useQuery<Alert[]>({
+    queryKey: ["/api/alerts/recent"],
+  });
+
+  // Count alerts where status is "new" (pending action)
+  const pendingCount = alerts?.filter((a) => a.status === "new").length || 0;
 
   return (
     <header className="sticky top-0 z-50 flex h-14 items-center gap-4 border-b bg-background px-6">
@@ -32,9 +42,11 @@ export function Header() {
         onClick={() => setLocation("/alerts")}
       >
         <Bell className="h-5 w-5" />
-        <Badge className="absolute -top-1 -right-1 h-5 w-5 p-0 flex items-center justify-center text-xs">
-          3
-        </Badge>
+        {pendingCount > 0 && (
+          <Badge className="absolute -top-1 -right-1 h-5 w-5 p-0 flex items-center justify-center text-xs">
+            {pendingCount}
+          </Badge>
+        )}
       </Button>
 
       <DropdownMenu>

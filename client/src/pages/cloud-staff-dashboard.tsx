@@ -84,7 +84,6 @@ export default function CloudStaffDashboard() {
   const [selectedHouse, setSelectedHouse] = useState<House | null>(null);
   const [isHouseDialogOpen, setIsHouseDialogOpen] = useState(false);
   const [isMaintenanceDialogOpen, setIsMaintenanceDialogOpen] = useState(false);
-  const [editingMaintenance, setEditingMaintenance] = useState<MaintenanceRecord | null>(null);
   
   const { data: alerts, isLoading: alertsLoading } = useQuery<Alert[]>({
     queryKey: ["/api/alerts/recent"],
@@ -100,6 +99,65 @@ export default function CloudStaffDashboard() {
 
   const { data: devices } = useQuery<Device[]>({
     queryKey: ["/api/devices"],
+  });
+
+  const { data: maintenanceRecords, isLoading: maintenanceLoading } = useQuery<MaintenanceRecord[]>({
+    queryKey: ["/api/maintenance"],
+  });
+
+  const maintenanceForm = useForm<MaintenanceFormValues>({
+    resolver: zodResolver(maintenanceFormSchema),
+    defaultValues: {
+      task: "",
+      scheduledDate: new Date().toISOString().split('T')[0],
+      category: "other",
+      priority: "medium",
+      status: "scheduled",
+      description: "",
+      assignedTo: "",
+    },
+  });
+
+  const createMaintenance = useMutation({
+    mutationFn: async (data: MaintenanceFormValues) => {
+      return await apiRequest("POST", "/api/maintenance", data);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/maintenance"] });
+      setIsMaintenanceDialogOpen(false);
+      maintenanceForm.reset();
+      toast({
+        title: "Maintenance Scheduled",
+        description: "New maintenance task has been added",
+      });
+    },
+    onError: () => {
+      toast({
+        title: "Error",
+        description: "Failed to create maintenance record",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const deleteMaintenance = useMutation({
+    mutationFn: async (id: string) => {
+      return await apiRequest("DELETE", `/api/maintenance/${id}`);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/maintenance"] });
+      toast({
+        title: "Maintenance Deleted",
+        description: "Maintenance task has been removed",
+      });
+    },
+    onError: () => {
+      toast({
+        title: "Error",
+        description: "Failed to delete maintenance record",
+        variant: "destructive",
+      });
+    },
   });
 
   const devicePerformanceData = [
@@ -594,45 +652,165 @@ export default function CloudStaffDashboard() {
 
       {/* Upcoming Maintenance */}
       <Card>
-        <CardHeader className="pb-2">
-          <CardTitle>Upcoming Maintenance</CardTitle>
-          <p className="text-sm text-muted-foreground">Scheduled system tasks</p>
+        <CardHeader className="pb-2 flex flex-row items-center justify-between space-y-0">
+          <div>
+            <CardTitle>Upcoming Maintenance</CardTitle>
+            <p className="text-sm text-muted-foreground">Scheduled system tasks</p>
+          </div>
+          <Dialog open={isMaintenanceDialogOpen} onOpenChange={setIsMaintenanceDialogOpen}>
+            <DialogTrigger asChild>
+              <Button size="sm" data-testid="button-schedule-maintenance">
+                <Plus className="h-4 w-4 mr-2" />
+                Schedule
+              </Button>
+            </DialogTrigger>
+            <DialogContent className="max-w-md">
+              <DialogHeader>
+                <DialogTitle>Schedule Maintenance</DialogTitle>
+                <DialogDescription>Add a new maintenance task</DialogDescription>
+              </DialogHeader>
+              <Form {...maintenanceForm}>
+                <form onSubmit={maintenanceForm.handleSubmit((data) => createMaintenance.mutate(data))} className="space-y-4">
+                  <FormField
+                    control={maintenanceForm.control}
+                    name="task"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Task</FormLabel>
+                        <FormControl>
+                          <Input placeholder="Database Optimization" {...field} data-testid="input-task" />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  <FormField
+                    control={maintenanceForm.control}
+                    name="scheduledDate"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Scheduled Date</FormLabel>
+                        <FormControl>
+                          <Input type="date" {...field} data-testid="input-date" />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  <FormField
+                    control={maintenanceForm.control}
+                    name="category"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Category</FormLabel>
+                        <Select onValueChange={field.onChange} defaultValue={field.value}>
+                          <FormControl>
+                            <SelectTrigger data-testid="select-category">
+                              <SelectValue placeholder="Select category" />
+                            </SelectTrigger>
+                          </FormControl>
+                          <SelectContent>
+                            <SelectItem value="database">Database</SelectItem>
+                            <SelectItem value="server">Server</SelectItem>
+                            <SelectItem value="network">Network</SelectItem>
+                            <SelectItem value="security">Security</SelectItem>
+                            <SelectItem value="hardware">Hardware</SelectItem>
+                            <SelectItem value="software">Software</SelectItem>
+                            <SelectItem value="other">Other</SelectItem>
+                          </SelectContent>
+                        </Select>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  <FormField
+                    control={maintenanceForm.control}
+                    name="priority"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Priority</FormLabel>
+                        <Select onValueChange={field.onChange} defaultValue={field.value}>
+                          <FormControl>
+                            <SelectTrigger data-testid="select-priority">
+                              <SelectValue placeholder="Select priority" />
+                            </SelectTrigger>
+                          </FormControl>
+                          <SelectContent>
+                            <SelectItem value="low">Low</SelectItem>
+                            <SelectItem value="medium">Medium</SelectItem>
+                            <SelectItem value="high">High</SelectItem>
+                            <SelectItem value="critical">Critical</SelectItem>
+                          </SelectContent>
+                        </Select>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  <div className="flex gap-2 pt-4">
+                    <Button type="submit" className="flex-1" disabled={createMaintenance.isPending} data-testid="button-submit-maintenance">
+                      {createMaintenance.isPending ? "Scheduling..." : "Schedule Maintenance"}
+                    </Button>
+                    <Button type="button" variant="outline" onClick={() => setIsMaintenanceDialogOpen(false)}>
+                      Cancel
+                    </Button>
+                  </div>
+                </form>
+              </Form>
+            </DialogContent>
+          </Dialog>
         </CardHeader>
         <CardContent>
-          <div className="space-y-3">
-            {[
-              {
-                task: "Database Optimization",
-                date: "2024-08-01",
-                status: "Scheduled",
-              },
-              {
-                task: "Cloud Server Patching",
-                date: "2024-08-03",
-                status: "Scheduled",
-              },
-              {
-                task: "Network Hardware Check",
-                date: "2024-08-10",
-                status: "Planned",
-              },
-            ].map((item, i) => (
-              <div
-                key={i}
-                className="flex items-center justify-between p-3 rounded-md border"
-                data-testid={`maintenance-item-${i}`}
-              >
-                <div className="flex items-center gap-3">
-                  <Clock className="h-4 w-4 text-muted-foreground" />
-                  <div>
-                    <p className="text-sm font-medium">{item.task}</p>
-                    <p className="text-xs text-muted-foreground">{item.date}</p>
+          {maintenanceLoading ? (
+            <div className="space-y-3">
+              {Array.from({ length: 3 }).map((_, i) => (
+                <Skeleton key={i} className="h-16" />
+              ))}
+            </div>
+          ) : maintenanceRecords && maintenanceRecords.length > 0 ? (
+            <div className="space-y-3">
+              {maintenanceRecords.map((item, i) => (
+                <div
+                  key={item.id}
+                  className="flex items-center justify-between p-3 rounded-md border"
+                  data-testid={`maintenance-item-${i}`}
+                >
+                  <div className="flex items-center gap-3 flex-1">
+                    <Clock className="h-4 w-4 text-muted-foreground" />
+                    <div className="flex-1">
+                      <p className="text-sm font-medium">{item.task}</p>
+                      <p className="text-xs text-muted-foreground">{item.scheduledDate}</p>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Badge variant="secondary" className="capitalize">{item.status}</Badge>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-8 w-8"
+                      onClick={() => deleteMaintenance.mutate(item.id)}
+                      data-testid={`button-delete-maintenance-${i}`}
+                    >
+                      <Trash2 className="h-4 w-4 text-destructive" />
+                    </Button>
                   </div>
                 </div>
-                <Badge variant="secondary">{item.status}</Badge>
-              </div>
-            ))}
-          </div>
+              ))}
+            </div>
+          ) : (
+            <div className="text-center py-8 text-muted-foreground">
+              <Calendar className="h-12 w-12 mx-auto mb-2 opacity-50" />
+              <p className="text-sm">No maintenance scheduled</p>
+              <Button
+                variant="outline"
+                size="sm"
+                className="mt-4"
+                onClick={() => setIsMaintenanceDialogOpen(true)}
+              >
+                <Plus className="h-4 w-4 mr-2" />
+                Schedule First Task
+              </Button>
+            </div>
+          )}
         </CardContent>
       </Card>
     </div>
