@@ -1,10 +1,12 @@
 import { useQuery } from "@tanstack/react-query";
+import { useLocation } from "wouter";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Slider } from "@/components/ui/slider";
 import { Skeleton } from "@/components/ui/skeleton";
+import { useToast } from "@/hooks/use-toast";
 import {
   Video,
   Play,
@@ -14,14 +16,20 @@ import {
   Volume2,
   AlertCircle,
   Download,
+  ArrowLeft,
+  VolumeX,
 } from "lucide-react";
 import { useState } from "react";
 import type { Device } from "@shared/schema";
 
 export default function SurveillancePage() {
+  const [, setLocation] = useLocation();
+  const { toast } = useToast();
   const [selectedCameras, setSelectedCameras] = useState<string[]>([]);
   const [volume, setVolume] = useState([70]);
   const [isRecording, setIsRecording] = useState(false);
+  const [playingCameras, setPlayingCameras] = useState<Set<number>>(new Set());
+  const [mutedCameras, setMutedCameras] = useState<Set<number>>(new Set());
 
   const { data: cameras, isLoading } = useQuery<Device[]>({
     queryKey: ["/api/devices/cameras"],
@@ -43,15 +51,96 @@ export default function SurveillancePage() {
     );
   };
 
+  const handlePlayPause = (cameraIndex: number) => {
+    setPlayingCameras((prev) => {
+      const newSet = new Set(prev);
+      if (newSet.has(cameraIndex)) {
+        newSet.delete(cameraIndex);
+        toast({
+          title: "Feed Paused",
+          description: `${mockCameraNames[cameraIndex]} feed paused`,
+        });
+      } else {
+        newSet.add(cameraIndex);
+        toast({
+          title: "Feed Playing",
+          description: `${mockCameraNames[cameraIndex]} feed resumed`,
+        });
+      }
+      return newSet;
+    });
+  };
+
+  const handleMuteToggle = (cameraIndex: number) => {
+    setMutedCameras((prev) => {
+      const newSet = new Set(prev);
+      if (newSet.has(cameraIndex)) {
+        newSet.delete(cameraIndex);
+        toast({
+          title: "Audio Enabled",
+          description: `${mockCameraNames[cameraIndex]} audio unmuted`,
+        });
+      } else {
+        newSet.add(cameraIndex);
+        toast({
+          title: "Audio Muted",
+          description: `${mockCameraNames[cameraIndex]} audio muted`,
+        });
+      }
+      return newSet;
+    });
+  };
+
+  const handleReplay = (cameraIndex: number) => {
+    toast({
+      title: "Replaying Last 30 Seconds",
+      description: `Rewinding ${mockCameraNames[cameraIndex]} feed`,
+    });
+  };
+
+  const handleCameraRecord = (cameraIndex: number) => {
+    toast({
+      title: "Recording Started",
+      description: `Now recording ${mockCameraNames[cameraIndex]}`,
+    });
+  };
+
+  const handleSnapshotAll = () => {
+    toast({
+      title: "Snapshots Captured",
+      description: `Downloaded snapshots from all ${mockCameraNames.length} active cameras`,
+    });
+  };
+
+  const handleEmergencyTrigger = () => {
+    toast({
+      title: "Emergency Alert Triggered",
+      description: "All authorities have been notified. Emergency protocols activated.",
+      variant: "destructive",
+    });
+  };
+
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-3xl font-semibold text-foreground" data-testid="text-surveillance-title">
-          Real-time Surveillance Feeds
-        </h1>
-        <p className="text-muted-foreground">
-          Monitor live video and audio streams from your connected cameras
-        </p>
+      <div className="flex items-center gap-4">
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={() => setLocation("/")}
+          data-testid="button-back-to-dashboard"
+          className="gap-2"
+        >
+          <ArrowLeft className="h-4 w-4" />
+          Back to Dashboard
+        </Button>
+        <div className="flex-1">
+          <h1 className="text-3xl font-semibold text-foreground" data-testid="text-surveillance-title">
+            Real-time Surveillance Feeds
+          </h1>
+          <p className="text-muted-foreground">
+            Monitor live video and audio streams from your connected cameras
+          </p>
+        </div>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
@@ -88,22 +177,33 @@ export default function SurveillancePage() {
                         size="icon"
                         className="h-8 w-8 bg-background/80 backdrop-blur"
                         data-testid={`button-play-${i}`}
+                        onClick={() => handlePlayPause(i)}
                       >
-                        <Play className="h-4 w-4" />
+                        {playingCameras.has(i) ? (
+                          <Pause className="h-4 w-4" />
+                        ) : (
+                          <Play className="h-4 w-4" />
+                        )}
                       </Button>
                       <Button
                         variant="secondary"
                         size="icon"
                         className="h-8 w-8 bg-background/80 backdrop-blur"
                         data-testid={`button-mute-${i}`}
+                        onClick={() => handleMuteToggle(i)}
                       >
-                        <Volume2 className="h-4 w-4" />
+                        {mutedCameras.has(i) ? (
+                          <VolumeX className="h-4 w-4" />
+                        ) : (
+                          <Volume2 className="h-4 w-4" />
+                        )}
                       </Button>
                       <Button
                         variant="secondary"
                         size="icon"
                         className="h-8 w-8 bg-background/80 backdrop-blur"
                         data-testid={`button-replay-${i}`}
+                        onClick={() => handleReplay(i)}
                       >
                         <RotateCcw className="h-4 w-4" />
                       </Button>
@@ -112,6 +212,7 @@ export default function SurveillancePage() {
                         size="icon"
                         className="h-8 w-8 bg-background/80 backdrop-blur ml-auto"
                         data-testid={`button-record-${i}`}
+                        onClick={() => handleCameraRecord(i)}
                       >
                         <Video className="h-4 w-4" />
                       </Button>
@@ -162,13 +263,26 @@ export default function SurveillancePage() {
               <Button
                 variant={isRecording ? "destructive" : "default"}
                 className="w-full"
-                onClick={() => setIsRecording(!isRecording)}
+                onClick={() => {
+                  setIsRecording(!isRecording);
+                  toast({
+                    title: isRecording ? "Recording Stopped" : "Recording Started",
+                    description: isRecording 
+                      ? "All camera recordings have been stopped" 
+                      : "Now recording all active camera feeds",
+                  });
+                }}
                 data-testid="button-start-recording"
               >
                 <Video className="h-4 w-4 mr-2" />
                 {isRecording ? "Stop Recording" : "Start All Recordings"}
               </Button>
-              <Button variant="outline" className="w-full" data-testid="button-snapshot">
+              <Button 
+                variant="outline" 
+                className="w-full" 
+                data-testid="button-snapshot"
+                onClick={handleSnapshotAll}
+              >
                 <Download className="h-4 w-4 mr-2" />
                 Snapshot All Feeds
               </Button>
@@ -201,6 +315,7 @@ export default function SurveillancePage() {
                 variant="destructive"
                 className="w-full"
                 data-testid="button-emergency-trigger"
+                onClick={handleEmergencyTrigger}
               >
                 <AlertCircle className="h-4 w-4 mr-2" />
                 Emergency Trigger
