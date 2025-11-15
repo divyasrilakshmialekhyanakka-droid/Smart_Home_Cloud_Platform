@@ -69,6 +69,7 @@ import type { Alert, User, House, Device, MaintenanceRecord } from "@shared/sche
 const maintenanceFormSchema = z.object({
   task: z.string().min(1, "Task is required"),
   scheduledDate: z.string().min(1, "Date is required"),
+  scheduledTime: z.string().min(1, "Time is required"),
   category: z.enum(["database", "server", "network", "security", "hardware", "software", "other"]),
   priority: z.enum(["low", "medium", "high", "critical"]),
   status: z.enum(["scheduled", "in_progress", "completed", "cancelled"]).default("scheduled"),
@@ -110,6 +111,7 @@ export default function CloudStaffDashboard() {
     defaultValues: {
       task: "",
       scheduledDate: new Date().toISOString().split('T')[0],
+      scheduledTime: "08:00",
       category: "other",
       priority: "medium",
       status: "scheduled",
@@ -692,6 +694,19 @@ export default function CloudStaffDashboard() {
                         <FormLabel>Scheduled Date</FormLabel>
                         <FormControl>
                           <Input type="date" {...field} data-testid="input-date" />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  <FormField
+                    control={maintenanceForm.control}
+                    name="scheduledTime"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Scheduled Time</FormLabel>
+                        <FormControl>
+                          <Input type="time" {...field} data-testid="input-time" />
                         </FormControl>
                         <FormMessage />
                       </FormItem>

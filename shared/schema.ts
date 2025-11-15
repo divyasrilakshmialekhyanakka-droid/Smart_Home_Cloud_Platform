@@ -214,6 +214,7 @@ export const maintenanceRecords = pgTable("maintenance_records", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   task: text("task").notNull(),
   scheduledDate: varchar("scheduled_date").notNull(), // YYYY-MM-DD format
+  scheduledTime: varchar("scheduled_time").notNull().default("08:00"), // HH:MM format
   status: varchar("status", { enum: ["scheduled", "in_progress", "completed", "cancelled"] }).notNull().default("scheduled"),
   category: varchar("category", { enum: ["database", "server", "network", "security", "hardware", "software", "other"] }).notNull().default("other"),
   priority: varchar("priority", { enum: ["low", "medium", "high", "critical"] }).notNull().default("medium"),
