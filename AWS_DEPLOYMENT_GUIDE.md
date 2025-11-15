@@ -57,6 +57,8 @@ Replit Auth (`ISSUER_URL: https://replit.com/oidc`) only works within Replit's h
 
 ### Google OAuth Setup
 
+**Implementation Details**: Google OAuth tokens (access_token, refresh_token) are stored in the session, enabling API calls to Google services on behalf of users if needed.
+
 1. **Create Google OAuth Credentials:**
    - Go to [Google Cloud Console](https://console.cloud.google.com/)
    - Create a new project or select existing

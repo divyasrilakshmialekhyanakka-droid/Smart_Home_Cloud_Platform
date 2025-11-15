@@ -19,7 +19,7 @@ export function setupGoogleAuth() {
         clientSecret: process.env.GOOGLE_CLIENT_SECRET,
         callbackURL,
       },
-      async (accessToken, refreshToken, profile, done) => {
+      async (accessToken: string, refreshToken: string, profile: any, done: any) => {
         try {
           const email = profile.emails?.[0]?.value;
           if (!email) {
@@ -36,17 +36,17 @@ export function setupGoogleAuth() {
             .from(users)
             .where(eq(users.email, email));
 
-          let user;
+          let dbUser;
           if (existingUsers.length > 0) {
             // User exists - update with Google ID if not already set
-            user = existingUsers[0];
-            if (!user.googleId) {
+            dbUser = existingUsers[0];
+            if (!dbUser.googleId) {
               const [updatedUser] = await db
                 .update(users)
                 .set({ googleId })
                 .where(eq(users.email, email))
                 .returning();
-              user = updatedUser;
+              dbUser = updatedUser;
             }
           } else {
             // Create new user with default homeowner role
@@ -60,10 +60,24 @@ export function setupGoogleAuth() {
                 role: "homeowner", // Default role for new Google OAuth users
               })
               .returning();
-            user = newUser;
+            dbUser = newUser;
           }
 
-          return done(null, user);
+          // Build user session object with OAuth tokens for API access
+          const userSession = {
+            id: dbUser.id,
+            email: dbUser.email,
+            role: dbUser.role,
+            firstName: dbUser.firstName,
+            lastName: dbUser.lastName,
+            googleId: dbUser.googleId,
+            // Store Google OAuth tokens for API access
+            access_token: accessToken,
+            refresh_token: refreshToken,
+            provider: 'google', // Explicitly mark as Google OAuth
+          };
+
+          return done(null, userSession);
         } catch (error) {
           console.error("Google OAuth error:", error);
           return done(error as Error);
