@@ -1,18 +1,264 @@
-import { sql } from "drizzle-orm";
-import { pgTable, text, varchar } from "drizzle-orm/pg-core";
+import { sql } from 'drizzle-orm';
+import {
+  index,
+  jsonb,
+  pgTable,
+  timestamp,
+  varchar,
+  text,
+  integer,
+  boolean,
+  real,
+} from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
+import { relations } from "drizzle-orm";
 
+// ===== SESSION STORAGE =====
+// (IMPORTANT) This table is mandatory for Replit Auth, don't drop it.
+export const sessions = pgTable(
+  "sessions",
+  {
+    sid: varchar("sid").primaryKey(),
+    sess: jsonb("sess").notNull(),
+    expire: timestamp("expire").notNull(),
+  },
+  (table) => [index("IDX_session_expire").on(table.expire)],
+);
+
+// ===== USERS TABLE =====
+// (IMPORTANT) This table is mandatory for Replit Auth, don't drop it.
 export const users = pgTable("users", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
-  username: text("username").notNull().unique(),
-  password: text("password").notNull(),
+  email: varchar("email").unique(),
+  firstName: varchar("first_name"),
+  lastName: varchar("last_name"),
+  profileImageUrl: varchar("profile_image_url"),
+  role: varchar("role", { enum: ["homeowner", "iot_team", "cloud_staff"] }).notNull().default("homeowner"),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
 });
 
-export const insertUserSchema = createInsertSchema(users).pick({
-  username: true,
-  password: true,
-});
-
-export type InsertUser = z.infer<typeof insertUserSchema>;
+export type UpsertUser = typeof users.$inferInsert;
 export type User = typeof users.$inferSelect;
+
+// ===== HOUSES TABLE =====
+export const houses = pgTable("houses", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  ownerId: varchar("owner_id").notNull().references(() => users.id),
+  name: text("name").notNull(),
+  address: text("address").notNull(),
+  timezone: varchar("timezone").default("UTC-05:00"),
+  latitude: real("latitude"),
+  longitude: real("longitude"),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+export const insertHouseSchema = createInsertSchema(houses).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export type InsertHouse = z.infer<typeof insertHouseSchema>;
+export type House = typeof houses.$inferSelect;
+
+// ===== DEVICES TABLE =====
+export const devices = pgTable("devices", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  houseId: varchar("house_id").notNull().references(() => houses.id, { onDelete: "cascade" }),
+  serialNumber: varchar("serial_number").unique(),
+  name: text("name").notNull(),
+  type: varchar("type", { 
+    enum: ["camera", "microphone", "motion_sensor", "thermostat", "lock", "light", "smoke_detector"] 
+  }).notNull(),
+  room: text("room").notNull(),
+  status: varchar("status", { enum: ["online", "offline", "warning"] }).notNull().default("offline"),
+  firmwareVersion: varchar("firmware_version"),
+  batteryLevel: integer("battery_level"), // 0-100
+  lastSeen: timestamp("last_seen"),
+  config: jsonb("config"), // Device-specific configuration
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+export const insertDeviceSchema = createInsertSchema(devices).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export type InsertDevice = z.infer<typeof insertDeviceSchema>;
+export type Device = typeof devices.$inferSelect;
+
+// ===== ALERTS TABLE =====
+export const alerts = pgTable("alerts", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  houseId: varchar("house_id").notNull().references(() => houses.id, { onDelete: "cascade" }),
+  deviceId: varchar("device_id").references(() => devices.id, { onDelete: "set null" }),
+  type: varchar("type", {
+    enum: [
+      "motion_detected",
+      "sound_detected",
+      "glass_break",
+      "fall_detected",
+      "scream_detected",
+      "device_offline",
+      "low_battery",
+      "temperature_anomaly",
+      "system_anomaly",
+      "intrusion",
+    ]
+  }).notNull(),
+  severity: varchar("severity", { enum: ["low", "medium", "high", "critical"] }).notNull(),
+  title: text("title").notNull(),
+  description: text("description").notNull(),
+  location: text("location"), // e.g., "Living Room", "Main Hall - Res. 123"
+  aiConfidence: real("ai_confidence"), // 0.0 - 1.0
+  aiDetails: jsonb("ai_details"), // Additional AI analysis data
+  status: varchar("status", { enum: ["new", "acknowledged", "resolved", "dismissed"] }).notNull().default("new"),
+  acknowledgedBy: varchar("acknowledged_by").references(() => users.id),
+  acknowledgedAt: timestamp("acknowledged_at"),
+  resolvedBy: varchar("resolved_by").references(() => users.id),
+  resolvedAt: timestamp("resolved_at"),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+export const insertAlertSchema = createInsertSchema(alerts).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export type InsertAlert = z.infer<typeof insertAlertSchema>;
+export type Alert = typeof alerts.$inferSelect;
+
+// ===== AUTOMATION RULES TABLE =====
+export const automationRules = pgTable("automation_rules", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  houseId: varchar("house_id").notNull().references(() => houses.id, { onDelete: "cascade" }),
+  name: text("name").notNull(),
+  trigger: text("trigger").notNull(), // e.g., "Motion in Yard", "Night time"
+  action: text("action").notNull(), // e.g., "Turn on Light", "Lock All Doors"
+  status: varchar("status", { enum: ["active", "inactive"] }).notNull().default("active"),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+export const insertAutomationRuleSchema = createInsertSchema(automationRules).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export type InsertAutomationRule = z.infer<typeof insertAutomationRuleSchema>;
+export type AutomationRule = typeof automationRules.$inferSelect;
+
+// ===== SENSOR DATA TABLE =====
+export const sensorData = pgTable("sensor_data", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  deviceId: varchar("device_id").notNull().references(() => devices.id, { onDelete: "cascade" }),
+  dataType: varchar("data_type", { 
+    enum: ["temperature", "motion", "audio_level", "video_frame", "power_consumption"] 
+  }).notNull(),
+  value: real("value"),
+  metadata: jsonb("metadata"), // Additional sensor-specific data
+  timestamp: timestamp("timestamp").notNull().defaultNow(),
+});
+
+export type SensorData = typeof sensorData.$inferSelect;
+
+// ===== USER CONFIGURATION LOGS TABLE =====
+export const userConfigLogs = pgTable("user_config_logs", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  userId: varchar("user_id").notNull().references(() => users.id),
+  configKey: text("config_key").notNull(),
+  oldValue: text("old_value"),
+  newValue: text("new_value"),
+  timestamp: timestamp("timestamp").notNull().defaultNow(),
+});
+
+export type UserConfigLog = typeof userConfigLogs.$inferSelect;
+
+// ===== SURVEILLANCE FEEDS TABLE =====
+export const surveillanceFeeds = pgTable("surveillance_feeds", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  deviceId: varchar("device_id").notNull().references(() => devices.id, { onDelete: "cascade" }),
+  feedUrl: text("feed_url").notNull(), // Mock URL for video feed
+  thumbnailUrl: text("thumbnail_url"),
+  isLive: boolean("is_live").notNull().default(true),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+export type SurveillanceFeed = typeof surveillanceFeeds.$inferSelect;
+
+// ===== RELATIONS =====
+export const usersRelations = relations(users, ({ many }) => ({
+  houses: many(houses),
+  acknowledgedAlerts: many(alerts, { relationName: "acknowledged_by" }),
+  resolvedAlerts: many(alerts, { relationName: "resolved_by" }),
+}));
+
+export const housesRelations = relations(houses, ({ one, many }) => ({
+  owner: one(users, {
+    fields: [houses.ownerId],
+    references: [users.id],
+  }),
+  devices: many(devices),
+  alerts: many(alerts),
+  automationRules: many(automationRules),
+}));
+
+export const devicesRelations = relations(devices, ({ one, many }) => ({
+  house: one(houses, {
+    fields: [devices.houseId],
+    references: [houses.id],
+  }),
+  alerts: many(alerts),
+  sensorData: many(sensorData),
+  surveillanceFeeds: many(surveillanceFeeds),
+}));
+
+export const alertsRelations = relations(alerts, ({ one }) => ({
+  house: one(houses, {
+    fields: [alerts.houseId],
+    references: [houses.id],
+  }),
+  device: one(devices, {
+    fields: [alerts.deviceId],
+    references: [devices.id],
+  }),
+  acknowledgedByUser: one(users, {
+    fields: [alerts.acknowledgedBy],
+    references: [users.id],
+    relationName: "acknowledged_by",
+  }),
+  resolvedByUser: one(users, {
+    fields: [alerts.resolvedBy],
+    references: [users.id],
+    relationName: "resolved_by",
+  }),
+}));
+
+export const automationRulesRelations = relations(automationRules, ({ one }) => ({
+  house: one(houses, {
+    fields: [automationRules.houseId],
+    references: [houses.id],
+  }),
+}));
+
+export const sensorDataRelations = relations(sensorData, ({ one }) => ({
+  device: one(devices, {
+    fields: [sensorData.deviceId],
+    references: [devices.id],
+  }),
+}));
+
+export const surveillanceFeedsRelations = relations(surveillanceFeeds, ({ one }) => ({
+  device: one(devices, {
+    fields: [surveillanceFeeds.deviceId],
+    references: [devices.id],
+  }),
+}));
