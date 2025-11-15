@@ -9,9 +9,12 @@ import {
   insertHouseSchema,
   maintenanceRecords,
   insertMaintenanceRecordSchema,
+  insertUserSchema,
 } from "@shared/schema";
 import { db } from "./db";
 import { eq } from "drizzle-orm";
+import { randomUUID } from "crypto";
+import { ZodError } from "zod";
 
 export async function registerRoutes(app: Express): Promise<Server> {
   // Auth middleware
@@ -50,6 +53,37 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("Error fetching active users:", error);
       res.status(500).json({ message: "Failed to fetch active users" });
+    }
+  });
+
+  app.post('/api/users', isAuthenticated, requireRole('cloud_staff'), async (req: any, res) => {
+    try {
+      // Validate request body using drizzle-zod schema
+      const validatedData = insertUserSchema.parse(req.body);
+
+      // Check if user with this email already exists
+      const existingUser = await storage.getUserByEmail(validatedData.email);
+      if (existingUser) {
+        return res.status(409).json({ message: "User with this email already exists" });
+      }
+
+      // Create user with a collision-safe UUID (will be replaced on OIDC login)
+      const userId = `pre-${randomUUID()}`;
+      const user = await storage.upsertUser({
+        id: userId,
+        ...validatedData,
+      });
+
+      res.status(201).json(user);
+    } catch (error) {
+      console.error("Error creating user:", error);
+      if (error instanceof ZodError) {
+        return res.status(400).json({ 
+          message: "Validation failed", 
+          errors: error.errors 
+        });
+      }
+      res.status(500).json({ message: "Failed to create user" });
     }
   });
 

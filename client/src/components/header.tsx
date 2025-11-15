@@ -20,9 +20,9 @@ export function Header() {
   const { user } = useAuth();
   const [, setLocation] = useLocation();
 
-  // Fetch alerts to get pending count
+  // Fetch ALL alerts to get accurate pending count
   const { data: alerts } = useQuery<Alert[]>({
-    queryKey: ["/api/alerts/recent"],
+    queryKey: ["/api/alerts"],
   });
 
   // Count alerts where status is "new" (pending action)

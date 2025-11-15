@@ -55,6 +55,12 @@ export function AppSidebar() {
       testId: "link-system-dashboard",
     },
     {
+      title: "Device Management",
+      url: "/devices",
+      icon: Smartphone,
+      testId: "link-devices",
+    },
+    {
       title: "User Management",
       url: "/users",
       icon: Users,
