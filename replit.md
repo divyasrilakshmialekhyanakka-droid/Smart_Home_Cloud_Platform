@@ -129,11 +129,17 @@ Preferred communication style: Simple, everyday language.
 
 **Database Service**: Neon serverless PostgreSQL with WebSocket support for connection pooling
 
-**Authentication Provider**: Replit OpenID Connect (OIDC) for user authentication
-- Issuer URL: `https://replit.com/oidc` (configurable via `ISSUER_URL`)
-- Requires `REPL_ID`, `SESSION_SECRET`, and OpenID client credentials
+**Authentication Providers**:
+- **Replit OpenID Connect (OIDC)** - For development on Replit
+  - Issuer URL: `https://replit.com/oidc` (configurable via `ISSUER_URL`)
+  - Requires `REPL_ID`, `SESSION_SECRET`, and OpenID client credentials
+- **Google OAuth 2.0** - For AWS EC2 production deployment
+  - Requires `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, and `GOOGLE_CALLBACK_URL`
+  - Users table includes `googleId` field for Google OAuth linking
+  - New users via Google OAuth default to homeowner role
 
 **Deployment Target**: Amazon EC2 (per project requirements)
+- Note: Replit PostgreSQL database is NOT portable to AWS - see AWS_DEPLOYMENT_GUIDE.md for migration strategy
 
 **UI Components**: Radix UI primitives provide accessible, unstyled components that are styled with Tailwind CSS
 

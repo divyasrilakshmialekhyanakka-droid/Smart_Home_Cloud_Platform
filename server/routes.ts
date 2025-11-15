@@ -2,7 +2,9 @@ import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
 import { setupAuth, isAuthenticated } from "./replitAuth";
+import { setupGoogleAuth } from "./googleAuth";
 import { requireRole, canAccessHouse } from "./middleware";
+import passport from "passport";
 import { 
   insertDeviceSchema, 
   insertAlertSchema, 
@@ -19,8 +21,32 @@ import { ZodError } from "zod";
 export async function registerRoutes(app: Express): Promise<Server> {
   // Auth middleware
   await setupAuth(app);
+  const googleAuthEnabled = setupGoogleAuth();
 
   // ===== AUTH ROUTES =====
+  
+  // Google OAuth routes (if configured)
+  if (googleAuthEnabled) {
+    app.get('/api/auth/google',
+      passport.authenticate('google', { scope: ['profile', 'email'] })
+    );
+
+    app.get('/api/auth/google/callback',
+      passport.authenticate('google', { failureRedirect: '/' }),
+      (req, res) => {
+        res.redirect('/');
+      }
+    );
+  }
+
+  // Check authentication status and which providers are available
+  app.get('/api/auth/providers', (req, res) => {
+    res.json({
+      replitAuth: true,
+      googleAuth: googleAuthEnabled,
+    });
+  });
+
   app.get('/api/auth/user', isAuthenticated, async (req: any, res) => {
     try {
       const userId = req.user.claims.sub;

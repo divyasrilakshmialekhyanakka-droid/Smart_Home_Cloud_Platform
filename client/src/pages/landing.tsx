@@ -1,8 +1,19 @@
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Home, Shield, Activity, Bell } from "lucide-react";
+import { useQuery } from "@tanstack/react-query";
+import { SiGoogle } from "react-icons/si";
+
+interface AuthProviders {
+  replitAuth: boolean;
+  googleAuth: boolean;
+}
 
 export default function Landing() {
+  const { data: providers } = useQuery<AuthProviders>({
+    queryKey: ["/api/auth/providers"],
+  });
+
   return (
     <div className="min-h-screen bg-background">
       <header className="border-b">
@@ -13,9 +24,21 @@ export default function Landing() {
             </div>
             <span className="text-xl font-semibold text-foreground">SmartHomeCloud</span>
           </div>
-          <Button asChild data-testid="button-login">
-            <a href="/api/login">Log In</a>
-          </Button>
+          <div className="flex gap-2">
+            {providers?.googleAuth && (
+              <Button variant="outline" asChild data-testid="button-google-login">
+                <a href="/api/auth/google" className="flex items-center gap-2">
+                  <SiGoogle className="h-4 w-4" />
+                  Google
+                </a>
+              </Button>
+            )}
+            {providers?.replitAuth && (
+              <Button asChild data-testid="button-login">
+                <a href="/api/login">Log In</a>
+              </Button>
+            )}
+          </div>
         </div>
       </header>
 
@@ -30,11 +53,23 @@ export default function Landing() {
             AI-powered monitoring platform with real-time surveillance, IoT device management,
             and emergency detection for safer senior living
           </p>
-          <Button size="lg" asChild data-testid="button-get-started">
-            <a href="/api/login" className="text-lg px-8 py-6">
-              Get Started
-            </a>
-          </Button>
+          <div className="flex gap-3 justify-center">
+            {providers?.googleAuth && (
+              <Button size="lg" variant="outline" asChild data-testid="button-get-started-google">
+                <a href="/api/auth/google" className="flex items-center gap-2 text-lg px-8 py-6">
+                  <SiGoogle className="h-5 w-5" />
+                  Sign in with Google
+                </a>
+              </Button>
+            )}
+            {providers?.replitAuth && (
+              <Button size="lg" asChild data-testid="button-get-started">
+                <a href="/api/login" className="text-lg px-8 py-6">
+                  {providers?.googleAuth ? "Sign in with Replit" : "Get Started"}
+                </a>
+              </Button>
+            )}
+          </div>
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
