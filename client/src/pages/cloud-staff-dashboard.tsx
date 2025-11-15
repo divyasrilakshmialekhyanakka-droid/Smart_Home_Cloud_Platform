@@ -1,4 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
+import { useLocation } from "wouter";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -28,6 +29,8 @@ import {
 import type { Alert, User } from "@shared/schema";
 
 export default function CloudStaffDashboard() {
+  const [, setLocation] = useLocation();
+  
   const { data: alerts, isLoading: alertsLoading } = useQuery<Alert[]>({
     queryKey: ["/api/alerts/recent"],
   });
@@ -97,7 +100,13 @@ export default function CloudStaffDashboard() {
                 <Home className="h-3 w-3" />
                 12 Active Facilities
               </Badge>
-              <Button variant="outline" size="sm" className="gap-1" data-testid="button-view-surveillance">
+              <Button 
+                variant="outline" 
+                size="sm" 
+                className="gap-1" 
+                data-testid="button-view-surveillance"
+                onClick={() => setLocation("/surveillance")}
+              >
                 <Eye className="h-3 w-3" />
                 View Surveillance
               </Button>
@@ -217,7 +226,12 @@ export default function CloudStaffDashboard() {
                     </div>
                     <div className="col-span-2 text-muted-foreground">{alert.location}</div>
                     <div className="col-span-1 text-right">
-                      <Button variant="outline" size="sm" data-testid={`button-view-details-${alert.id}`}>
+                      <Button 
+                        variant="outline" 
+                        size="sm" 
+                        data-testid={`button-view-details-${alert.id}`}
+                        onClick={() => setLocation("/alerts")}
+                      >
                         View Details
                       </Button>
                     </div>
