@@ -31,6 +31,7 @@ export default function SurveillancePage() {
   const [isRecording, setIsRecording] = useState(false);
   const [playingCameras, setPlayingCameras] = useState<Set<string>>(new Set());
   const [mutedCameras, setMutedCameras] = useState<Set<string>>(new Set());
+  const [recordingCameras, setRecordingCameras] = useState<Set<string>>(new Set());
 
   const { data: cameras, isLoading } = useQuery<Device[]>({
     queryKey: ["/api/devices/cameras"],
@@ -91,10 +92,23 @@ export default function SurveillancePage() {
     });
   };
 
-  const handleCameraRecord = (cameraName: string) => {
-    toast({
-      title: "Recording Started",
-      description: `Now recording ${cameraName}`,
+  const handleCameraRecord = (cameraId: string, cameraName: string) => {
+    setRecordingCameras((prev) => {
+      const newSet = new Set(prev);
+      if (newSet.has(cameraId)) {
+        newSet.delete(cameraId);
+        toast({
+          title: "Recording Stopped",
+          description: `Stopped recording ${cameraName}`,
+        });
+      } else {
+        newSet.add(cameraId);
+        toast({
+          title: "Recording Started",
+          description: `Now recording ${cameraName}`,
+        });
+      }
+      return newSet;
     });
   };
 
@@ -281,11 +295,11 @@ export default function SurveillancePage() {
                         <RotateCcw className="h-4 w-4" />
                       </Button>
                       <Button
-                        variant="secondary"
+                        variant={recordingCameras.has(camera.id) ? "destructive" : "secondary"}
                         size="icon"
                         className="h-8 w-8 bg-background/80 backdrop-blur ml-auto"
                         data-testid={`button-record-${i}`}
-                        onClick={() => handleCameraRecord(camera.name)}
+                        onClick={() => handleCameraRecord(camera.id, camera.name)}
                       >
                         <Video className="h-4 w-4" />
                       </Button>

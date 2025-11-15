@@ -197,6 +197,30 @@ export const surveillanceFeeds = pgTable("surveillance_feeds", {
 
 export type SurveillanceFeed = typeof surveillanceFeeds.$inferSelect;
 
+// ===== MAINTENANCE RECORDS TABLE =====
+export const maintenanceRecords = pgTable("maintenance_records", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  task: text("task").notNull(),
+  scheduledDate: varchar("scheduled_date").notNull(), // YYYY-MM-DD format
+  status: varchar("status", { enum: ["scheduled", "in_progress", "completed", "cancelled"] }).notNull().default("scheduled"),
+  category: varchar("category", { enum: ["database", "server", "network", "security", "hardware", "software", "other"] }).notNull().default("other"),
+  priority: varchar("priority", { enum: ["low", "medium", "high", "critical"] }).notNull().default("medium"),
+  description: text("description"),
+  assignedTo: varchar("assigned_to"),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+  completedAt: timestamp("completed_at"),
+});
+
+export const insertMaintenanceRecordSchema = createInsertSchema(maintenanceRecords).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export type InsertMaintenanceRecord = z.infer<typeof insertMaintenanceRecordSchema>;
+export type MaintenanceRecord = typeof maintenanceRecords.$inferSelect;
+
 // ===== RELATIONS =====
 export const usersRelations = relations(users, ({ many }) => ({
   houses: many(houses),

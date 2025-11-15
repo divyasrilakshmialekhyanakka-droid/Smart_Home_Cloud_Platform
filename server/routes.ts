@@ -3,7 +3,15 @@ import { createServer, type Server } from "http";
 import { storage } from "./storage";
 import { setupAuth, isAuthenticated } from "./replitAuth";
 import { requireRole, canAccessHouse } from "./middleware";
-import { insertDeviceSchema, insertAlertSchema, insertHouseSchema } from "@shared/schema";
+import { 
+  insertDeviceSchema, 
+  insertAlertSchema, 
+  insertHouseSchema,
+  maintenanceRecords,
+  insertMaintenanceRecordSchema,
+} from "@shared/schema";
+import { db } from "./db";
+import { eq } from "drizzle-orm";
 
 export async function registerRoutes(app: Express): Promise<Server> {
   // Auth middleware
@@ -362,6 +370,68 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("Error fetching config logs:", error);
       res.status(500).json({ message: "Failed to fetch config logs" });
+    }
+  });
+
+  // ===== MAINTENANCE ROUTES (Staff Only) =====
+  app.get('/api/maintenance', isAuthenticated, requireRole('cloud_staff'), async (req: any, res) => {
+    try {
+      const records = await db.select().from(maintenanceRecords).orderBy(maintenanceRecords.scheduledDate);
+      res.json(records);
+    } catch (error) {
+      console.error("Error fetching maintenance records:", error);
+      res.status(500).json({ message: "Failed to fetch maintenance records" });
+    }
+  });
+
+  app.post('/api/maintenance', isAuthenticated, requireRole('cloud_staff'), async (req: any, res) => {
+    try {
+      const validatedData = insertMaintenanceRecordSchema.parse(req.body);
+      const [record] = await db.insert(maintenanceRecords).values(validatedData).returning();
+      res.status(201).json(record);
+    } catch (error) {
+      console.error("Error creating maintenance record:", error);
+      res.status(500).json({ message: "Failed to create maintenance record" });
+    }
+  });
+
+  app.patch('/api/maintenance/:id', isAuthenticated, requireRole('cloud_staff'), async (req: any, res) => {
+    try {
+      const { id } = req.params;
+      const updates = req.body;
+      
+      const [updated] = await db.update(maintenanceRecords)
+        .set({ ...updates, updatedAt: new Date() })
+        .where(eq(maintenanceRecords.id, id))
+        .returning();
+      
+      if (!updated) {
+        return res.status(404).json({ message: "Maintenance record not found" });
+      }
+      
+      res.json(updated);
+    } catch (error) {
+      console.error("Error updating maintenance record:", error);
+      res.status(500).json({ message: "Failed to update maintenance record" });
+    }
+  });
+
+  app.delete('/api/maintenance/:id', isAuthenticated, requireRole('cloud_staff'), async (req: any, res) => {
+    try {
+      const { id } = req.params;
+      
+      const [deleted] = await db.delete(maintenanceRecords)
+        .where(eq(maintenanceRecords.id, id))
+        .returning();
+      
+      if (!deleted) {
+        return res.status(404).json({ message: "Maintenance record not found" });
+      }
+      
+      res.json({ message: "Maintenance record deleted successfully" });
+    } catch (error) {
+      console.error("Error deleting maintenance record:", error);
+      res.status(500).json({ message: "Failed to delete maintenance record" });
     }
   });
 
