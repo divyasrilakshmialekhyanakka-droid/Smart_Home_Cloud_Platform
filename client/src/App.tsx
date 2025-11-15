@@ -17,6 +17,7 @@ import DeviceManagement from "@/pages/device-management";
 import UserManagement from "@/pages/user-management";
 import SystemConfiguration from "@/pages/system-configuration";
 import DatabaseManagement from "@/pages/database-management";
+import ProfilePage from "@/pages/profile";
 
 function Router() {
   const { isAuthenticated, isLoading, user } = useAuth();
@@ -56,6 +57,7 @@ function Router() {
       <Route path="/users" component={UserManagement} />
       <Route path="/configuration" component={SystemConfiguration} />
       <Route path="/database" component={DatabaseManagement} />
+      <Route path="/profile" component={ProfilePage} />
       <Route component={NotFound} />
     </Switch>
   );
