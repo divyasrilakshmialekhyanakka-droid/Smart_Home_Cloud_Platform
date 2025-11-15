@@ -45,9 +45,12 @@ export type User = typeof users.$inferSelect;
 // ===== HOUSES TABLE =====
 export const houses = pgTable("houses", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
-  ownerId: varchar("owner_id").notNull().references(() => users.id),
+  ownerId: varchar("owner_id").references(() => users.id),
   name: text("name").notNull(),
   address: text("address").notNull(),
+  squareFeet: integer("square_feet"),
+  bedrooms: integer("bedrooms"),
+  bathrooms: integer("bathrooms"),
   timezone: varchar("timezone").default("UTC-05:00"),
   latitude: real("latitude"),
   longitude: real("longitude"),
