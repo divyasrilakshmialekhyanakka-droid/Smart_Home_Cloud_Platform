@@ -271,8 +271,15 @@ export default function ProfilePage() {
             </div>
             <Button
               variant="outline"
-              onClick={() => window.location.href = '/api/logout'}
-              data-testid="button-logout"
+              onClick={async () => {
+                try {
+                  await fetch('/api/auth/logout', { method: 'POST' });
+                  window.location.href = '/login';
+                } catch (error) {
+                  console.error('Logout failed:', error);
+                }
+              }}
+              data-testid="button-logout-profile"
             >
               Sign Out
             </Button>

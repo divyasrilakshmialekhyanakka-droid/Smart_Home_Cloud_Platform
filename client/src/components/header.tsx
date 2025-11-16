@@ -88,11 +88,19 @@ export function Header() {
             </Link>
           </DropdownMenuItem>
           <DropdownMenuSeparator />
-          <DropdownMenuItem asChild>
-            <a href="/api/logout" data-testid="link-logout">
-              <LogOut className="mr-2 h-4 w-4" />
-              Log out
-            </a>
+          <DropdownMenuItem 
+            onClick={async () => {
+              try {
+                await fetch('/api/auth/logout', { method: 'POST' });
+                window.location.href = '/login';
+              } catch (error) {
+                console.error('Logout failed:', error);
+              }
+            }}
+            data-testid="button-logout"
+          >
+            <LogOut className="mr-2 h-4 w-4" />
+            Log out
           </DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>
