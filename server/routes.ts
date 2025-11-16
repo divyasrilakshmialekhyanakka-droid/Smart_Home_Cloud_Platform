@@ -13,9 +13,12 @@ import {
   audioDetections,
   alerts,
   houses,
+  users,
+  devices,
+  userConfigLogs,
 } from "@shared/schema";
 import { db } from "./db";
-import { eq } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 import { randomUUID } from "crypto";
 import { ZodError } from "zod";
 import multer from "multer";
@@ -409,6 +412,178 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("Error fetching config logs:", error);
       res.status(500).json({ message: "Failed to fetch config logs" });
+    }
+  });
+
+  app.get('/api/database/stats', isAuthenticated, requireRole('cloud_staff', 'iot_team'), async (req: any, res) => {
+    try {
+      // Execute all count queries in parallel with proper error handling
+      const [
+        usersCountResult,
+        housesCountResult,
+        devicesCountResult,
+        alertsCountResult,
+        maintenanceCountResult,
+        configLogsCountResult,
+        audioDetectionsCountResult,
+        dbSizeResult
+      ] = await Promise.allSettled([
+        db.select({ count: sql<number>`count(*)` }).from(users),
+        db.select({ count: sql<number>`count(*)` }).from(houses),
+        db.select({ count: sql<number>`count(*)` }).from(devices),
+        db.select({ count: sql<number>`count(*)` }).from(alerts),
+        db.select({ count: sql<number>`count(*)` }).from(maintenanceRecords),
+        db.select({ count: sql<number>`count(*)` }).from(userConfigLogs),
+        db.select({ count: sql<number>`count(*)` }).from(audioDetections),
+        db.execute(sql`SELECT pg_size_pretty(pg_database_size(current_database())) as size`)
+      ]);
+      
+      const usersCount = usersCountResult.status === 'fulfilled' ? usersCountResult.value[0]?.count || 0 : 0;
+      const housesCount = housesCountResult.status === 'fulfilled' ? housesCountResult.value[0]?.count || 0 : 0;
+      const devicesCount = devicesCountResult.status === 'fulfilled' ? devicesCountResult.value[0]?.count || 0 : 0;
+      const alertsCount = alertsCountResult.status === 'fulfilled' ? alertsCountResult.value[0]?.count || 0 : 0;
+      const maintenanceCount = maintenanceCountResult.status === 'fulfilled' ? maintenanceCountResult.value[0]?.count || 0 : 0;
+      const configLogsCount = configLogsCountResult.status === 'fulfilled' ? configLogsCountResult.value[0]?.count || 0 : 0;
+      const audioDetectionsCount = audioDetectionsCountResult.status === 'fulfilled' ? audioDetectionsCountResult.value[0]?.count || 0 : 0;
+      
+      const totalRecords = 
+        usersCount + 
+        housesCount + 
+        devicesCount + 
+        alertsCount + 
+        maintenanceCount + 
+        configLogsCount +
+        audioDetectionsCount;
+
+      const databaseSize = dbSizeResult.status === 'fulfilled' 
+        ? (dbSizeResult.value.rows[0] as any)?.size || "Unknown"
+        : "Unknown";
+
+      // Collect any errors
+      const errors: string[] = [];
+      [usersCountResult, housesCountResult, devicesCountResult, alertsCountResult, 
+       maintenanceCountResult, configLogsCountResult, audioDetectionsCountResult, dbSizeResult]
+        .forEach((result, index) => {
+          if (result.status === 'rejected') {
+            const tables = ['users', 'houses', 'devices', 'alerts', 'maintenance', 'configLogs', 'audioDetections', 'dbSize'];
+            const errorMsg = `Failed to fetch ${tables[index]} count`;
+            errors.push(errorMsg);
+            console.error(errorMsg, result.reason);
+          }
+        });
+      
+      res.json({
+        totalRecords,
+        databaseSize,
+        tables: {
+          users: usersCount,
+          houses: housesCount,
+          devices: devicesCount,
+          alerts: alertsCount,
+          maintenance: maintenanceCount,
+          configLogs: configLogsCount,
+          audioDetections: audioDetectionsCount,
+        },
+        errors: errors.length > 0 ? errors : undefined
+      });
+    } catch (error) {
+      console.error("Error fetching database stats:", error);
+      res.status(500).json({ message: "Failed to fetch database stats" });
+    }
+  });
+
+  app.get('/api/database/export', isAuthenticated, requireRole('cloud_staff'), async (req: any, res) => {
+    try {
+      const type = req.query.type as string || 'all';
+      const userId = req.user.claims.sub;
+      const limit = parseInt(req.query.limit as string) || 10000; // Default max 10k records per table
+      
+      // Validate type parameter
+      const validTypes = ['all', 'users', 'devices', 'alerts', 'config', 'houses', 'maintenance', 'audio'];
+      if (!validTypes.includes(type)) {
+        console.warn(`[SECURITY] Invalid export type attempted: ${type} by user ${userId}`);
+        return res.status(400).json({ message: "Invalid export type" });
+      }
+      
+      // Enforce reasonable size limit
+      if (limit > 50000) {
+        console.warn(`[SECURITY] Export limit too high: ${limit} by user ${userId}`);
+        return res.status(400).json({ message: "Export limit too high (max 50,000 records per table)" });
+      }
+      
+      // Audit log the export (stdout + structured logging for production)
+      const auditLog = {
+        action: 'database_export',
+        type,
+        userId,
+        limit,
+        timestamp: new Date().toISOString(),
+        ip: req.ip
+      };
+      console.log(`[AUDIT] ${JSON.stringify(auditLog)}`);
+      
+      let data: any = {};
+      let warnings: string[] = [];
+      const promises: Promise<any>[] = [];
+
+      if (type === 'all' || type === 'users') {
+        promises.push(db.select().from(users).limit(limit).then(result => { 
+          data.users = result;
+          if (result.length === limit) warnings.push(`Users table limited to ${limit} records`);
+        }));
+      }
+      if (type === 'all' || type === 'devices') {
+        promises.push(db.select().from(devices).limit(limit).then(result => { 
+          data.devices = result;
+          if (result.length === limit) warnings.push(`Devices table limited to ${limit} records`);
+        }));
+      }
+      if (type === 'all' || type === 'alerts') {
+        promises.push(db.select().from(alerts).limit(limit).then(result => { 
+          data.alerts = result;
+          if (result.length === limit) warnings.push(`Alerts table limited to ${limit} records`);
+        }));
+      }
+      if (type === 'all' || type === 'config') {
+        promises.push(db.select().from(userConfigLogs).limit(limit).then(result => { 
+          data.configLogs = result;
+          if (result.length === limit) warnings.push(`Config logs limited to ${limit} records`);
+        }));
+      }
+      if (type === 'all' || type === 'houses') {
+        promises.push(db.select().from(houses).limit(limit).then(result => { 
+          data.houses = result;
+          if (result.length === limit) warnings.push(`Houses table limited to ${limit} records`);
+        }));
+      }
+      if (type === 'all' || type === 'maintenance') {
+        promises.push(db.select().from(maintenanceRecords).limit(limit).then(result => { 
+          data.maintenance = result;
+          if (result.length === limit) warnings.push(`Maintenance records limited to ${limit} records`);
+        }));
+      }
+      if (type === 'all' || type === 'audio') {
+        promises.push(db.select().from(audioDetections).limit(limit).then(result => { 
+          data.audioDetections = result;
+          if (result.length === limit) warnings.push(`Audio detections limited to ${limit} records`);
+        }));
+      }
+
+      await Promise.all(promises);
+
+      const totalRecords = Object.values(data).reduce((sum: number, arr: any) => sum + (arr?.length || 0), 0);
+      console.log(`[AUDIT] ${JSON.stringify({...auditLog, status: 'completed', totalRecords, warnings: warnings.length})}`);
+
+      if (warnings.length > 0) {
+        data._warnings = warnings;
+      }
+
+      res.setHeader('Content-Type', 'application/json');
+      res.setHeader('Content-Disposition', `attachment; filename="database-export-${type}-${new Date().toISOString()}.json"`);
+      res.json(data);
+    } catch (error) {
+      console.error(`[AUDIT] Database export failed - User: ${(req as any).user?.claims?.sub}, Error:`, error);
+      res.status(500).json({ message: "Failed to export database" });
     }
   });
 

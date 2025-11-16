@@ -33,7 +33,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Users, Search, RefreshCw, UserPlus, Shield, Home, Wrench } from "lucide-react";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import type { User } from "@shared/schema";
@@ -45,12 +45,22 @@ const addUserFormSchema = z.object({
   role: z.enum(["homeowner", "iot_team", "cloud_staff"]),
 });
 
+const editUserFormSchema = z.object({
+  email: z.string().email("Please enter a valid email address"),
+  firstName: z.string().min(1, "First name is required"),
+  lastName: z.string().min(1, "Last name is required"),
+  role: z.enum(["homeowner", "iot_team", "cloud_staff"]),
+});
+
 type AddUserFormValues = z.infer<typeof addUserFormSchema>;
+type EditUserFormValues = z.infer<typeof editUserFormSchema>;
 
 export default function UserManagement() {
   const [searchQuery, setSearchQuery] = useState("");
   const [roleFilter, setRoleFilter] = useState<string>("all");
   const [isAddUserDialogOpen, setIsAddUserDialogOpen] = useState(false);
+  const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
+  const [selectedUser, setSelectedUser] = useState<User | null>(null);
   const { toast } = useToast();
 
   const { data: users, isLoading } = useQuery<User[]>({
@@ -59,6 +69,16 @@ export default function UserManagement() {
 
   const addUserForm = useForm<AddUserFormValues>({
     resolver: zodResolver(addUserFormSchema),
+    defaultValues: {
+      email: "",
+      firstName: "",
+      lastName: "",
+      role: "homeowner",
+    },
+  });
+
+  const editUserForm = useForm<EditUserFormValues>({
+    resolver: zodResolver(editUserFormSchema),
     defaultValues: {
       email: "",
       firstName: "",
@@ -88,6 +108,45 @@ export default function UserManagement() {
       });
     },
   });
+
+  const updateUserMutation = useMutation({
+    mutationFn: async (data: EditUserFormValues & { id: string }) => {
+      return await apiRequest("PATCH", `/api/users/${data.id}`, {
+        email: data.email,
+        firstName: data.firstName,
+        lastName: data.lastName,
+        role: data.role,
+      });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/users"] });
+      setIsEditDialogOpen(false);
+      setSelectedUser(null);
+      toast({
+        title: "User Updated",
+        description: "The user has been successfully updated",
+      });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to update user",
+        variant: "destructive",
+      });
+    },
+  });
+
+  // Populate edit form when selectedUser changes
+  useEffect(() => {
+    if (selectedUser && isEditDialogOpen) {
+      editUserForm.reset({
+        email: selectedUser.email || "",
+        firstName: selectedUser.firstName || "",
+        lastName: selectedUser.lastName || "",
+        role: selectedUser.role || "homeowner",
+      });
+    }
+  }, [selectedUser, isEditDialogOpen, editUserForm]);
 
   const filteredUsers = users?.filter((user) => {
     if (roleFilter !== "all" && user.role !== roleFilter) return false;
@@ -236,6 +295,106 @@ export default function UserManagement() {
         </Dialog>
       </div>
 
+      {/* Edit User Dialog */}
+      <Dialog open={isEditDialogOpen} onOpenChange={(open) => {
+        setIsEditDialogOpen(open);
+        if (!open) {
+          setSelectedUser(null);
+          editUserForm.reset({
+            email: "",
+            firstName: "",
+            lastName: "",
+            role: "homeowner",
+          });
+        }
+      }}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Edit User</DialogTitle>
+            <DialogDescription>
+              Update user details and role assignment
+            </DialogDescription>
+          </DialogHeader>
+          <Form {...editUserForm}>
+            <form onSubmit={editUserForm.handleSubmit((data) => {
+              if (selectedUser) {
+                updateUserMutation.mutate({ ...data, id: selectedUser.id });
+              }
+            })} className="space-y-4">
+              <FormField
+                control={editUserForm.control}
+                name="email"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Email</FormLabel>
+                    <FormControl>
+                      <Input placeholder="user@example.com" {...field} data-testid="input-edit-email" />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={editUserForm.control}
+                name="firstName"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>First Name</FormLabel>
+                    <FormControl>
+                      <Input placeholder="John" {...field} data-testid="input-edit-first-name" />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={editUserForm.control}
+                name="lastName"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Last Name</FormLabel>
+                    <FormControl>
+                      <Input placeholder="Doe" {...field} data-testid="input-edit-last-name" />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={editUserForm.control}
+                name="role"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Role</FormLabel>
+                    <Select onValueChange={field.onChange} value={field.value}>
+                      <FormControl>
+                        <SelectTrigger data-testid="select-edit-role">
+                          <SelectValue placeholder="Select a role" />
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent>
+                        <SelectItem value="homeowner">Homeowner</SelectItem>
+                        <SelectItem value="iot_team">IoT Team</SelectItem>
+                        <SelectItem value="cloud_staff">Cloud Staff</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <div className="flex gap-2 pt-4">
+                <Button type="submit" className="flex-1" disabled={updateUserMutation.isPending} data-testid="button-submit-edit">
+                  {updateUserMutation.isPending ? "Saving..." : "Save Changes"}
+                </Button>
+                <Button type="button" variant="outline" onClick={() => setIsEditDialogOpen(false)}>
+                  Cancel
+                </Button>
+              </div>
+            </form>
+          </Form>
+        </DialogContent>
+      </Dialog>
+
       {/* Stats Cards */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
         <Card>
@@ -374,7 +533,15 @@ export default function UserManagement() {
                       {new Date(user.createdAt!).toLocaleDateString()}
                     </div>
                     <div className="col-span-1 text-right">
-                      <Button variant="ghost" size="sm" data-testid={`button-edit-${user.id}`}>
+                      <Button 
+                        variant="ghost" 
+                        size="sm" 
+                        data-testid={`button-edit-${user.id}`}
+                        onClick={() => {
+                          setSelectedUser(user);
+                          setIsEditDialogOpen(true);
+                        }}
+                      >
                         Edit
                       </Button>
                     </div>

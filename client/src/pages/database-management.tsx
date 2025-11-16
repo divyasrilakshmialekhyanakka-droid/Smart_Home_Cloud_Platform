@@ -11,16 +11,45 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { Database, Download, Search } from "lucide-react";
 import { useState } from "react";
+import { useToast } from "@/hooks/use-toast";
 import type { UserConfigLog } from "@shared/schema";
+
+interface DatabaseStats {
+  totalRecords: number;
+  databaseSize: string;
+  tables: {
+    users: number;
+    houses: number;
+    devices: number;
+    alerts: number;
+    maintenance: number;
+    configLogs: number;
+    audioDetections: number;
+  };
+}
 
 export default function DatabaseManagement() {
   const [filterType, setFilterType] = useState<string>("all");
   const [searchQuery, setSearchQuery] = useState("");
+  const [selectedLog, setSelectedLog] = useState<UserConfigLog | null>(null);
+  const [isViewDialogOpen, setIsViewDialogOpen] = useState(false);
+  const { toast } = useToast();
 
   const { data: configLogs, isLoading } = useQuery<UserConfigLog[]>({
     queryKey: ["/api/database/config-logs"],
+  });
+
+  const { data: stats } = useQuery<DatabaseStats>({
+    queryKey: ["/api/database/stats"],
   });
 
   const filteredLogs = configLogs?.filter((log) => {
@@ -29,6 +58,71 @@ export default function DatabaseManagement() {
     }
     return true;
   });
+
+  const handleExportAll = async () => {
+    try {
+      const response = await fetch(`/api/database/export?type=${filterType}`, {
+        credentials: 'include',
+      });
+      if (!response.ok) throw new Error('Export failed');
+      
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `database-export-${filterType}-${new Date().toISOString()}.json`;
+      document.body.appendChild(a);
+      a.click();
+      window.URL.revokeObjectURL(url);
+      document.body.removeChild(a);
+      
+      toast({
+        title: "Export Successful",
+        description: `Database export (${filterType}) downloaded successfully`,
+      });
+    } catch (error) {
+      toast({
+        title: "Export Failed",
+        description: "Failed to export database",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const handleExportUserConfigs = async () => {
+    try {
+      const response = await fetch('/api/database/export?type=config', {
+        credentials: 'include',
+      });
+      if (!response.ok) throw new Error('Export failed');
+      
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `user-configs-export-${new Date().toISOString()}.json`;
+      document.body.appendChild(a);
+      a.click();
+      window.URL.revokeObjectURL(url);
+      document.body.removeChild(a);
+      
+      toast({
+        title: "Export Successful",
+        description: "User configurations exported successfully",
+      });
+    } catch (error) {
+      toast({
+        title: "Export Failed",
+        description: "Failed to export user configurations",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const handleViewLog = (log: UserConfigLog) => {
+    setSelectedLog(log);
+    setIsViewDialogOpen(true);
+  };
 
   return (
     <div className="space-y-6">
@@ -58,7 +152,7 @@ export default function DatabaseManagement() {
                   <SelectItem value="config">Configurations</SelectItem>
                 </SelectContent>
               </Select>
-              <Button data-testid="button-export-all">
+              <Button onClick={handleExportAll} data-testid="button-export-all">
                 <Download className="h-4 w-4 mr-2" />
                 Export All Data
               </Button>
@@ -76,7 +170,7 @@ export default function DatabaseManagement() {
                 Detailed records of all user-specific settings and preference changes
               </p>
             </div>
-            <Button variant="outline" size="sm" data-testid="button-export-user-configs">
+            <Button variant="outline" size="sm" onClick={handleExportUserConfigs} data-testid="button-export-user-configs">
               Export User Configs
             </Button>
           </div>
@@ -154,7 +248,7 @@ export default function DatabaseManagement() {
                     {new Date(log.timestamp).toLocaleString()}
                   </div>
                   <div className="col-span-1 text-right">
-                    <Button variant="ghost" size="sm" data-testid={`button-view-${log.id}`}>
+                    <Button variant="ghost" size="sm" onClick={() => handleViewLog(log)} data-testid={`button-view-${log.id}`}>
                       View
                     </Button>
                   </div>
@@ -180,7 +274,9 @@ export default function DatabaseManagement() {
             <CardTitle className="text-sm font-medium">Total Records</CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="text-3xl font-bold">15,247</div>
+            <div className="text-3xl font-bold" data-testid="text-total-records">
+              {stats?.totalRecords?.toLocaleString() || 0}
+            </div>
             <p className="text-xs text-muted-foreground mt-1">Across all tables</p>
           </CardContent>
         </Card>
@@ -190,7 +286,9 @@ export default function DatabaseManagement() {
             <CardTitle className="text-sm font-medium">Database Size</CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="text-3xl font-bold">2.3 GB</div>
+            <div className="text-3xl font-bold" data-testid="text-database-size">
+              {stats?.databaseSize || "Loading..."}
+            </div>
             <p className="text-xs text-muted-foreground mt-1">Current usage</p>
           </CardContent>
         </Card>
@@ -200,11 +298,57 @@ export default function DatabaseManagement() {
             <CardTitle className="text-sm font-medium">Last Backup</CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="text-3xl font-bold">2h ago</div>
-            <p className="text-xs text-muted-foreground mt-1">Auto-backup enabled</p>
+            <div className="text-3xl font-bold">Real-time</div>
+            <p className="text-xs text-muted-foreground mt-1">Neon auto-backup enabled</p>
           </CardContent>
         </Card>
       </div>
+
+      {/* View Config Log Dialog */}
+      <Dialog open={isViewDialogOpen} onOpenChange={setIsViewDialogOpen}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>Configuration Log Details</DialogTitle>
+            <DialogDescription>
+              Complete details of configuration change
+            </DialogDescription>
+          </DialogHeader>
+          {selectedLog && (
+            <div className="space-y-4">
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <p className="text-sm font-medium text-muted-foreground">Log ID</p>
+                  <p className="font-mono text-sm">{selectedLog.id}</p>
+                </div>
+                <div>
+                  <p className="text-sm font-medium text-muted-foreground">User ID</p>
+                  <p className="font-mono text-sm">{selectedLog.userId}</p>
+                </div>
+              </div>
+              <div>
+                <p className="text-sm font-medium text-muted-foreground">Configuration Key</p>
+                <p className="text-sm">{selectedLog.configKey}</p>
+              </div>
+              <div>
+                <p className="text-sm font-medium text-muted-foreground">Old Value</p>
+                <pre className="text-sm bg-muted p-3 rounded-md overflow-auto">
+                  {selectedLog.oldValue || "null"}
+                </pre>
+              </div>
+              <div>
+                <p className="text-sm font-medium text-muted-foreground">New Value</p>
+                <pre className="text-sm bg-muted p-3 rounded-md overflow-auto">
+                  {selectedLog.newValue || "null"}
+                </pre>
+              </div>
+              <div>
+                <p className="text-sm font-medium text-muted-foreground">Timestamp</p>
+                <p className="text-sm">{new Date(selectedLog.timestamp).toLocaleString()}</p>
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
