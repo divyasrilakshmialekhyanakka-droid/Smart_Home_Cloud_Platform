@@ -30,11 +30,16 @@ export default function Landing() {
             AI-powered monitoring platform with real-time surveillance, IoT device management,
             and emergency detection for safer senior living
           </p>
-          <Button size="lg" asChild data-testid="button-get-started">
-            <a href="/api/login" className="text-lg px-8 py-6">
-              Get Started
-            </a>
-          </Button>
+          <div className="flex flex-col items-center gap-4">
+            <Button size="lg" asChild data-testid="button-get-started">
+              <a href="/api/login" className="text-lg px-8 py-6">
+                Get Started
+              </a>
+            </Button>
+            <p className="text-sm text-muted-foreground">
+              Sign up with email or use Google, GitHub, Apple, or X
+            </p>
+          </div>
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">

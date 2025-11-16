@@ -54,12 +54,22 @@ function updateUserSession(
 async function upsertUser(
   claims: any,
 ) {
+  // Check if user exists by ID or email to preserve their role
+  const existingUserById = await storage.getUser(claims["sub"]);
+  const existingUserByEmail = claims["email"] ? await storage.getUserByEmail(claims["email"]) : null;
+  
+  // Only assign default 'homeowner' role for completely new users
+  // If user exists by email (pre-seeded) or ID (returning user), don't send role - let storage preserve existing role
+  const shouldAssignDefaultRole = !existingUserById && !existingUserByEmail;
+  
   await storage.upsertUser({
     id: claims["sub"],
     email: claims["email"],
     firstName: claims["first_name"],
     lastName: claims["last_name"],
     profileImageUrl: claims["profile_image_url"],
+    // Only assign default role for completely new users
+    ...(shouldAssignDefaultRole && { role: "homeowner" }),
   });
 }
 

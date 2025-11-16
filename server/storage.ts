@@ -120,7 +120,7 @@ export class DatabaseStorage implements IStorage {
   }
 
   async getUsersByRole(role: string): Promise<User[]> {
-    return await db.select().from(users).where(eq(users.role, role));
+    return await db.select().from(users).where(eq(users.role, role as any));
   }
 
   async getAllUsers(): Promise<User[]> {
@@ -179,7 +179,7 @@ export class DatabaseStorage implements IStorage {
   }
 
   async getDevicesByType(type: string): Promise<Device[]> {
-    return await db.select().from(devices).where(eq(devices.type, type));
+    return await db.select().from(devices).where(eq(devices.type, type as any));
   }
 
   // Alert operations
