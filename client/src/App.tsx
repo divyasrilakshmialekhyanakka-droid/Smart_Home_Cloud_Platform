@@ -18,6 +18,7 @@ import UserManagement from "@/pages/user-management";
 import SystemConfiguration from "@/pages/system-configuration";
 import DatabaseManagement from "@/pages/database-management";
 import ProfilePage from "@/pages/profile";
+import AudioDetection from "@/pages/audio-detection";
 
 function Router() {
   const { isAuthenticated, isLoading, user } = useAuth();
@@ -54,6 +55,7 @@ function Router() {
       <Route path="/alerts" component={AlertsPage} />
       <Route path="/surveillance" component={SurveillancePage} />
       <Route path="/devices" component={DeviceManagement} />
+      <Route path="/audio-detection" component={AudioDetection} />
       <Route path="/users" component={UserManagement} />
       <Route path="/configuration" component={SystemConfiguration} />
       <Route path="/database" component={DatabaseManagement} />

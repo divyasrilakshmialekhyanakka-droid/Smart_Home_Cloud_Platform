@@ -7,6 +7,7 @@ import {
   Users,
   LayoutDashboard,
   Smartphone,
+  Mic,
 } from "lucide-react";
 import { Link, useLocation } from "wouter";
 import { useAuth } from "@/hooks/useAuth";
@@ -61,6 +62,12 @@ export function AppSidebar() {
       testId: "link-devices",
     },
     {
+      title: "Audio Detection",
+      url: "/audio-detection",
+      icon: Mic,
+      testId: "link-audio-detection",
+    },
+    {
       title: "User Management",
       url: "/users",
       icon: Users,
@@ -98,6 +105,12 @@ export function AppSidebar() {
       url: "/devices",
       icon: Smartphone,
       testId: "link-devices",
+    },
+    {
+      title: "Audio Detection",
+      url: "/audio-detection",
+      icon: Mic,
+      testId: "link-audio-detection",
     },
     {
       title: "Surveillance",

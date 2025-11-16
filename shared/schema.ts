@@ -234,6 +234,33 @@ export const insertMaintenanceRecordSchema = createInsertSchema(maintenanceRecor
 export type InsertMaintenanceRecord = z.infer<typeof insertMaintenanceRecordSchema>;
 export type MaintenanceRecord = typeof maintenanceRecords.$inferSelect;
 
+// ===== AUDIO DETECTIONS TABLE =====
+export const audioDetections = pgTable("audio_detections", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  deviceId: varchar("device_id").notNull().references(() => devices.id, { onDelete: "cascade" }),
+  houseId: varchar("house_id").notNull().references(() => houses.id),
+  fileName: text("file_name").notNull(),
+  fileSize: integer("file_size"),
+  duration: real("duration"),
+  modelUsed: varchar("model_used", { enum: ["yamnet", "hubert", "both"] }).notNull().default("both"),
+  detectedClass: text("detected_class").notNull(), // e.g., "dog", "human scream", "glass breaking"
+  confidence: real("confidence").notNull(), // 0.0 to 1.0
+  predictions: jsonb("predictions"), // Full prediction results from models
+  alertGenerated: boolean("alert_generated").notNull().default(false),
+  alertId: varchar("alert_id").references(() => alerts.id),
+  processedAt: timestamp("processed_at").defaultNow(),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+export const insertAudioDetectionSchema = createInsertSchema(audioDetections).omit({
+  id: true,
+  createdAt: true,
+  processedAt: true,
+});
+
+export type InsertAudioDetection = z.infer<typeof insertAudioDetectionSchema>;
+export type AudioDetection = typeof audioDetections.$inferSelect;
+
 // ===== RELATIONS =====
 export const usersRelations = relations(users, ({ many }) => ({
   houses: many(houses),

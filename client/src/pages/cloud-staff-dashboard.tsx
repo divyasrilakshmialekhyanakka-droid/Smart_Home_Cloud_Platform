@@ -50,6 +50,7 @@ import {
   Pencil,
   Trash2,
   Calendar,
+  Mic,
 } from "lucide-react";
 import {
   LineChart,
@@ -64,7 +65,7 @@ import {
 } from "recharts";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
-import type { Alert, User, House, Device, MaintenanceRecord } from "@shared/schema";
+import type { Alert, User, House, Device, MaintenanceRecord, AudioDetection } from "@shared/schema";
 
 const maintenanceFormSchema = z.object({
   task: z.string().min(1, "Task is required"),
@@ -104,6 +105,11 @@ export default function CloudStaffDashboard() {
 
   const { data: maintenanceRecords, isLoading: maintenanceLoading } = useQuery<MaintenanceRecord[]>({
     queryKey: ["/api/maintenance"],
+  });
+
+  const { data: audioDetections, isLoading: audioDetectionsLoading } = useQuery<AudioDetection[]>({
+    queryKey: ["/api/audio/detections"],
+    refetchInterval: 10000,
   });
 
   const maintenanceForm = useForm<MaintenanceFormValues>({
@@ -607,6 +613,70 @@ export default function CloudStaffDashboard() {
           </CardContent>
         </Card>
       </div>
+
+      {/* Audio Detections */}
+      <Card>
+        <CardHeader className="pb-2 flex flex-row items-center justify-between space-y-0">
+          <div>
+            <CardTitle className="flex items-center gap-2">
+              <Mic className="h-5 w-5" />
+              Audio AI Detections
+            </CardTitle>
+            <p className="text-sm text-muted-foreground">YAMNet & HuBERT model results</p>
+          </div>
+          <Button variant="outline" size="sm" asChild>
+            <a href="/audio-detection">View All</a>
+          </Button>
+        </CardHeader>
+        <CardContent>
+          {audioDetectionsLoading ? (
+            <div className="space-y-3">
+              {Array.from({ length: 3 }).map((_, i) => (
+                <Skeleton key={i} className="h-16" />
+              ))}
+            </div>
+          ) : audioDetections && audioDetections.length > 0 ? (
+            <div className="space-y-2">
+              {audioDetections.slice(0, 5).map((detection) => {
+                const device = devices?.find(d => d.id === detection.deviceId);
+                return (
+                  <div 
+                    key={detection.id} 
+                    className="flex items-center justify-between p-3 bg-muted/50 rounded-lg"
+                    data-testid={`audio-detection-${detection.id}`}
+                  >
+                    <div className="flex-1">
+                      <p className="font-medium text-sm">{detection.detectedClass}</p>
+                      <p className="text-xs text-muted-foreground">
+                        {device?.name} • {detection.fileName}
+                      </p>
+                    </div>
+                    <div className="flex items-center gap-3">
+                      <Badge variant="outline" className="text-xs">
+                        {detection.modelUsed.toUpperCase()}
+                      </Badge>
+                      <span className="text-sm text-muted-foreground">
+                        {(detection.confidence * 100).toFixed(1)}%
+                      </span>
+                      {detection.alertGenerated && (
+                        <Badge variant="destructive" className="text-xs">
+                          Alert
+                        </Badge>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          ) : (
+            <div className="text-center py-8 text-muted-foreground">
+              <Mic className="h-12 w-12 mx-auto mb-3 opacity-50" />
+              <p>No audio detections yet</p>
+              <p className="text-sm mt-1">Upload audio files to test AI models</p>
+            </div>
+          )}
+        </CardContent>
+      </Card>
 
       {/* Device Performance */}
       <Card>

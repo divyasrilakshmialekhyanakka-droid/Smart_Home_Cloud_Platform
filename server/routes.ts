@@ -10,11 +10,16 @@ import {
   maintenanceRecords,
   insertMaintenanceRecordSchema,
   insertUserSchema,
+  audioDetections,
+  alerts,
+  houses,
 } from "@shared/schema";
 import { db } from "./db";
 import { eq } from "drizzle-orm";
 import { randomUUID } from "crypto";
 import { ZodError } from "zod";
+import multer from "multer";
+import { analyzeAudio, generateAlertDescription } from "./audioDetectionService";
 
 export async function registerRoutes(app: Express): Promise<Server> {
   // Auth middleware
@@ -466,6 +471,179 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("Error deleting maintenance record:", error);
       res.status(500).json({ message: "Failed to delete maintenance record" });
+    }
+  });
+
+  // ===== AUDIO DETECTION ROUTES (IoT Team & Cloud Staff) =====
+  
+  // Configure multer for audio file uploads (in-memory storage)
+  const audioUpload = multer({
+    storage: multer.memoryStorage(),
+    limits: {
+      fileSize: 10 * 1024 * 1024, // 10MB max file size
+    },
+    fileFilter: (req, file, cb) => {
+      // Accept common audio formats
+      const allowedMimeTypes = [
+        'audio/wav',
+        'audio/wave',
+        'audio/x-wav',
+        'audio/mpeg',
+        'audio/mp3',
+        'audio/ogg',
+        'audio/webm',
+        'audio/flac',
+      ];
+      
+      if (allowedMimeTypes.includes(file.mimetype)) {
+        cb(null, true);
+      } else {
+        cb(new Error('Invalid file type. Only audio files are allowed.'));
+      }
+    },
+  });
+
+  // Get all audio detections (with pagination)
+  app.get('/api/audio/detections', isAuthenticated, requireRole('cloud_staff', 'iot_team'), async (req: any, res) => {
+    try {
+      const limit = parseInt(req.query.limit as string) || 50;
+      const detections = await db.select()
+        .from(audioDetections)
+        .orderBy(audioDetections.createdAt)
+        .limit(limit);
+      
+      res.json(detections);
+    } catch (error) {
+      console.error("Error fetching audio detections:", error);
+      res.status(500).json({ message: "Failed to fetch audio detections" });
+    }
+  });
+
+  // Get audio detections for a specific device (Staff & IoT Team only - no homeowner access to prevent cross-tenant data leakage)
+  app.get('/api/audio/detections/device/:deviceId', isAuthenticated, requireRole('cloud_staff', 'iot_team'), async (req: any, res) => {
+    try {
+      const { deviceId } = req.params;
+      const limit = parseInt(req.query.limit as string) || 20;
+      
+      // Verify device exists (role check already done by requireRole middleware)
+      const device = await storage.getDevice(deviceId);
+      if (!device) {
+        return res.status(404).json({ message: "Device not found" });
+      }
+      
+      const detections = await db.select()
+        .from(audioDetections)
+        .where(eq(audioDetections.deviceId, deviceId))
+        .orderBy(audioDetections.createdAt)
+        .limit(limit);
+      
+      res.json(detections);
+    } catch (error) {
+      console.error("Error fetching device audio detections:", error);
+      res.status(500).json({ message: "Failed to fetch device audio detections" });
+    }
+  });
+
+  // Analyze audio file and potentially generate alert
+  app.post('/api/audio/analyze', isAuthenticated, requireRole('cloud_staff', 'iot_team'), audioUpload.single('audio'), async (req: any, res) => {
+    try {
+      if (!req.file) {
+        return res.status(400).json({ message: "No audio file provided" });
+      }
+
+      const { deviceId } = req.body;
+      
+      if (!deviceId) {
+        return res.status(400).json({ message: "Device ID is required" });
+      }
+
+      // Get device details
+      const device = await storage.getDevice(deviceId);
+      if (!device) {
+        return res.status(404).json({ message: "Device not found" });
+      }
+
+      // Get house details for location context
+      const [house] = await db.select().from(houses).where(eq(houses.id, device.houseId));
+      const deviceLocation = `${device.room || 'Unknown Room'} - ${house?.name || 'Unknown House'}`;
+
+      // Analyze audio using simulated YAMNet and HuBERT models
+      const analysisResult = analyzeAudio(
+        req.file.originalname,
+        req.file.buffer,
+        deviceLocation
+      );
+
+      // Create audio detection record
+      const [detection] = await db.insert(audioDetections).values({
+        deviceId: device.id,
+        houseId: device.houseId,
+        fileName: req.file.originalname,
+        fileSize: req.file.size,
+        modelUsed: analysisResult.primaryDetection.model,
+        detectedClass: analysisResult.primaryDetection.class,
+        confidence: analysisResult.primaryDetection.confidence,
+        predictions: analysisResult.allPredictions,
+        alertGenerated: analysisResult.shouldGenerateAlert,
+      }).returning();
+
+      // Generate alert if necessary
+      let generatedAlert = null;
+      if (analysisResult.shouldGenerateAlert) {
+        const alertDescription = generateAlertDescription(
+          analysisResult.primaryDetection.class,
+          analysisResult.primaryDetection.confidence,
+          device.name,
+          deviceLocation
+        );
+
+        // Map audio detection alert type to existing alert type enum
+        const alertTypeMapping: Record<string, typeof alerts.$inferInsert.type> = {
+          'emergency': 'sound_detected',
+          'safety': 'sound_detected',
+          'security': 'intrusion',
+          'maintenance': 'system_anomaly',
+          'health': 'scream_detected',
+        };
+
+        const alertType = alertTypeMapping[analysisResult.alertType!] || 'sound_detected';
+
+        const [newAlert] = await db.insert(alerts).values({
+          houseId: device.houseId,
+          deviceId: device.id,
+          type: alertType,
+          severity: analysisResult.alertSeverity!,
+          title: analysisResult.alertMessage!,
+          description: alertDescription,
+          location: deviceLocation,
+          aiConfidence: analysisResult.primaryDetection.confidence,
+          aiDetails: analysisResult.allPredictions,
+          status: 'new',
+        }).returning();
+
+        generatedAlert = newAlert;
+
+        // Update detection record with alert ID
+        await db.update(audioDetections)
+          .set({ alertId: newAlert.id })
+          .where(eq(audioDetections.id, detection.id));
+      }
+
+      res.status(201).json({
+        detection: {
+          ...detection,
+          alertId: generatedAlert?.id || null,
+        },
+        analysis: analysisResult,
+        alert: generatedAlert,
+      });
+
+    } catch (error) {
+      console.error("Error analyzing audio:", error);
+      if (error instanceof Error && error.message.includes('Invalid file type')) {
+        return res.status(400).json({ message: error.message });
+      }
+      res.status(500).json({ message: "Failed to analyze audio" });
     }
   });
 
