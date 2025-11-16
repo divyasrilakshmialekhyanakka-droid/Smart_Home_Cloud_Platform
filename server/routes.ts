@@ -1,10 +1,8 @@
 import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
-import { setupAuth, isAuthenticated, getUserId } from "./replitAuth";
-import { setupGoogleAuth } from "./googleAuth";
+import { setupAuth, isAuthenticated } from "./replitAuth";
 import { requireRole, canAccessHouse } from "./middleware";
-import passport from "passport";
 import { 
   insertDeviceSchema, 
   insertAlertSchema, 
@@ -21,52 +19,17 @@ import { ZodError } from "zod";
 export async function registerRoutes(app: Express): Promise<Server> {
   // Auth middleware
   await setupAuth(app);
-  const googleAuthEnabled = setupGoogleAuth();
 
   // ===== AUTH ROUTES =====
-  
-  // Google OAuth routes (if configured)
-  if (googleAuthEnabled) {
-    app.get('/api/auth/google',
-      passport.authenticate('google', { 
-        scope: ['profile', 'email'],
-        accessType: 'offline',
-        prompt: 'consent',
-      })
-    );
-
-    app.get('/api/auth/google/callback',
-      passport.authenticate('google', { failureRedirect: '/' }),
-      (req, res) => {
-        res.redirect('/');
-      }
-    );
-  }
-
-  // Check authentication status and which providers are available
-  app.get('/api/auth/providers', (req, res) => {
-    // Replit Auth is available if we have the required environment variables
-    const replitAuthAvailable = !!(process.env.REPL_ID && process.env.ISSUER_URL);
-    
-    res.json({
-      replitAuth: replitAuthAvailable,
-      googleAuth: googleAuthEnabled,
-    });
-  });
-
-  app.get('/api/auth/user', isAuthenticated, async (req: any, res, next) => {
+  app.get('/api/auth/user', isAuthenticated, async (req: any, res) => {
     try {
-      const userId = getUserId(req);
+      const userId = req.user.claims.sub;
       const user = await storage.getUser(userId);
       if (!user) {
         return res.status(404).json({ message: "User not found" });
       }
       res.json(user);
-    } catch (error: any) {
-      // Let UnauthorizedError propagate to global handler
-      if (error.name === 'UnauthorizedError') {
-        return next(error);
-      }
+    } catch (error) {
       console.error("Error fetching user:", error);
       res.status(500).json({ message: "Failed to fetch user" });
     }
@@ -127,7 +90,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // ===== HOUSE ROUTES =====
   app.post('/api/houses', isAuthenticated, async (req: any, res) => {
     try {
-      const userId = getUserId(req);
+      const userId = req.user.claims.sub;
       const validatedData = insertHouseSchema.parse({
         ...req.body,
         ownerId: userId,
@@ -142,7 +105,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.get('/api/houses', isAuthenticated, async (req: any, res) => {
     try {
-      const userId = getUserId(req);
+      const userId = req.user.claims.sub;
       const user = await storage.getUser(userId);
       
       if (user?.role === 'cloud_staff' || user?.role === 'iot_team') {
@@ -179,7 +142,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.get('/api/devices', isAuthenticated, async (req: any, res) => {
     try {
-      const userId = getUserId(req);
+      const userId = req.user.claims.sub;
       const user = await storage.getUser(userId);
 
       if (!user) {
@@ -205,7 +168,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.get('/api/devices/cameras', isAuthenticated, async (req: any, res) => {
     try {
-      const userId = getUserId(req);
+      const userId = req.user.claims.sub;
       const user = await storage.getUser(userId);
 
       if (!user) {
@@ -231,7 +194,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.get('/api/devices/:id', isAuthenticated, async (req: any, res) => {
     try {
-      const userId = getUserId(req);
+      const userId = req.user.claims.sub;
       const user = await storage.getUser(userId);
       const device = await storage.getDevice(req.params.id);
 
@@ -277,7 +240,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // ===== ALERT ROUTES =====
   app.post('/api/alerts', isAuthenticated, async (req: any, res) => {
     try {
-      const userId = getUserId(req);
+      const userId = req.user.claims.sub;
       const user = await storage.getUser(userId);
       const validatedData = insertAlertSchema.parse(req.body);
 
@@ -303,7 +266,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.get('/api/alerts', isAuthenticated, async (req: any, res) => {
     try {
-      const userId = getUserId(req);
+      const userId = req.user.claims.sub;
       const user = await storage.getUser(userId);
 
       if (!user) {
@@ -329,7 +292,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.get('/api/alerts/recent', isAuthenticated, async (req: any, res) => {
     try {
-      const userId = getUserId(req);
+      const userId = req.user.claims.sub;
       const user = await storage.getUser(userId);
       const limit = parseInt(req.query.limit as string) || 10;
 
@@ -356,7 +319,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.post('/api/alerts/:id/acknowledge', isAuthenticated, async (req: any, res) => {
     try {
-      const userId = getUserId(req);
+      const userId = req.user.claims.sub;
       const user = await storage.getUser(userId);
       const alert = await storage.getAlert(req.params.id);
 
@@ -382,7 +345,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.post('/api/alerts/:id/resolve', isAuthenticated, async (req: any, res) => {
     try {
-      const userId = getUserId(req);
+      const userId = req.user.claims.sub;
       const user = await storage.getUser(userId);
       const alert = await storage.getAlert(req.params.id);
 
@@ -408,7 +371,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.post('/api/alerts/:id/dismiss', isAuthenticated, async (req: any, res) => {
     try {
-      const userId = getUserId(req);
+      const userId = req.user.claims.sub;
       const user = await storage.getUser(userId);
       const alert = await storage.getAlert(req.params.id);
 
