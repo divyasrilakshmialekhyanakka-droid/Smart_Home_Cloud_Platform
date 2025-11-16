@@ -121,8 +121,8 @@ psql "$DATABASE_URL" -c "UPDATE users SET role = 'cloud_staff' WHERE email = 'ad
 
 ## Documentation
 
-- **[Deployment Guide](DEPLOYMENT.md)** - Complete AWS EC2 deployment instructions
-- **[Database Setup](DATABASE_SETUP.md)** - Database configuration and management
+- **[DEPLOYMENT.md](DEPLOYMENT.md)** - ⭐ **Minimal step-by-step AWS deployment guide (EC2 + RDS, Free Tier)**
+- **[DATABASE_SETUP.md](DATABASE_SETUP.md)** - Database configuration and management details
 - **[Git Setup](GIT_SETUP.md)** - Version control and repository management
 - **[Project Documentation](replit.md)** - Detailed architecture and technical notes
 
@@ -186,18 +186,17 @@ GITHUB_CLIENT_SECRET=...
 
 ## Deployment
 
-### Quick Deploy to AWS EC2
+### Quick Deploy to AWS EC2 (Free Tier)
 
-1. **Set up EC2 instance** (Ubuntu 22.04 LTS, t3.small or larger)
-2. **Install Node.js 20.x and PM2**
-3. **Clone repository and install dependencies**
+Simple deployment using 100% free tier resources:
+
+1. **Launch EC2 t3.micro** (Ubuntu 22.04 LTS)
+2. **Set up database** (Neon PostgreSQL - free forever, OR RDS db.t3.micro)
+3. **Run deployment script** or follow manual steps
 4. **Configure environment variables**
-5. **Set up PostgreSQL database** (RDS or Neon)
-6. **Build and start application**
-7. **Configure Nginx reverse proxy**
-8. **Set up SSL with Let's Encrypt**
+5. **Access your application**
 
-See **[DEPLOYMENT.md](DEPLOYMENT.md)** for detailed step-by-step instructions.
+See **[DEPLOYMENT.md](DEPLOYMENT.md)** for complete step-by-step guide.
 
 ## Database Schema
 

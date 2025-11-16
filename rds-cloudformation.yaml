@@ -1,0 +1,236 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 'RDS PostgreSQL Database for SmartHomeCloud Platform'
+
+Parameters:
+  DBInstanceIdentifier:
+    Type: String
+    Default: smarthome-db
+    Description: RDS instance identifier
+  
+  DBName:
+    Type: String
+    Default: postgres
+    Description: Initial database name
+  
+  MasterUsername:
+    Type: String
+    Default: postgres
+    Description: Master database username
+    NoEcho: false
+  
+  MasterUserPassword:
+    Type: String
+    NoEcho: true
+    Description: Master database password (minimum 8 characters)
+    MinLength: 8
+  
+  DBInstanceClass:
+    Type: String
+    Default: db.t3.micro
+    Description: RDS instance class
+    AllowedValues:
+      - db.t3.micro
+      - db.t3.small
+      - db.t3.medium
+      - db.t3.large
+    ConstraintDescription: Must be a valid RDS instance class
+  
+  AllocatedStorage:
+    Type: Number
+    Default: 20
+    Description: Allocated storage in GB
+    MinValue: 20
+    MaxValue: 1000
+  
+  EngineVersion:
+    Type: String
+    Default: '14.9'
+    Description: PostgreSQL engine version
+    AllowedValues:
+      - '14.9'
+      - '15.4'
+      - '16.1'
+  
+  BackupRetentionPeriod:
+    Type: Number
+    Default: 7
+    Description: Backup retention period in days
+    MinValue: 0
+    MaxValue: 35
+  
+  MultiAZ:
+    Type: String
+    Default: 'false'
+    Description: Enable Multi-AZ deployment
+    AllowedValues:
+      - 'true'
+      - 'false'
+  
+  PubliclyAccessible:
+    Type: String
+    Default: 'false'
+    Description: Enable public access (NOT recommended for production)
+    AllowedValues:
+      - 'true'
+      - 'false'
+  
+  StorageEncrypted:
+    Type: String
+    Default: 'true'
+    Description: Enable encryption at rest
+    AllowedValues:
+      - 'true'
+      - 'false'
+
+Resources:
+  # VPC (if not using existing)
+  VPC:
+    Type: AWS::EC2::VPC
+    Condition: CreateVPC
+    Properties:
+      CidrBlock: 10.0.0.0/16
+      EnableDnsHostnames: true
+      EnableDnsSupport: true
+      Tags:
+        - Key: Name
+          Value: !Sub '${AWS::StackName}-vpc'
+
+  # Internet Gateway
+  InternetGateway:
+    Type: AWS::EC2::InternetGateway
+    Condition: CreateVPC
+    Properties:
+      Tags:
+        - Key: Name
+          Value: !Sub '${AWS::StackName}-igw'
+
+  InternetGatewayAttachment:
+    Type: AWS::EC2::VPCGatewayAttachment
+    Condition: CreateVPC
+    Properties:
+      InternetGatewayId: !Ref InternetGateway
+      VpcId: !Ref VPC
+
+  # Subnets
+  PrivateSubnet1:
+    Type: AWS::EC2::Subnet
+    Condition: CreateVPC
+    Properties:
+      VpcId: !Ref VPC
+      AvailabilityZone: !Select [0, !GetAZs '']
+      CidrBlock: 10.0.1.0/24
+      Tags:
+        - Key: Name
+          Value: !Sub '${AWS::StackName}-private-subnet-1'
+
+  PrivateSubnet2:
+    Type: AWS::EC2::Subnet
+    Condition: CreateVPC
+    Properties:
+      VpcId: !Ref VPC
+      AvailabilityZone: !Select [1, !GetAZs '']
+      CidrBlock: 10.0.2.0/24
+      Tags:
+        - Key: Name
+          Value: !Sub '${AWS::StackName}-private-subnet-2'
+
+  # DB Subnet Group
+  DBSubnetGroup:
+    Type: AWS::RDS::DBSubnetGroup
+    Properties:
+      DBSubnetGroupDescription: Subnet group for RDS instance
+      SubnetIds:
+        - !If [CreateVPC, !Ref PrivateSubnet1, !Ref ExistingSubnet1]
+        - !If [CreateVPC, !Ref PrivateSubnet2, !Ref ExistingSubnet2]
+      Tags:
+        - Key: Name
+          Value: !Sub '${AWS::StackName}-db-subnet-group'
+
+  # Security Group for RDS
+  RDSSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Security group for RDS PostgreSQL instance
+      VpcId: !If [CreateVPC, !Ref VPC, !Ref ExistingVPC]
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 5432
+          ToPort: 5432
+          SourceSecurityGroupId: !Ref EC2SecurityGroup
+          Description: Allow PostgreSQL from EC2 instance
+      Tags:
+        - Key: Name
+          Value: !Sub '${AWS::StackName}-rds-sg'
+
+  # EC2 Security Group (reference - should exist)
+  EC2SecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Security group for EC2 instance (reference)
+      VpcId: !If [CreateVPC, !Ref VPC, !Ref ExistingVPC]
+      Tags:
+        - Key: Name
+          Value: !Sub '${AWS::StackName}-ec2-sg'
+
+  # RDS Instance
+  DBInstance:
+    Type: AWS::RDS::DBInstance
+    DeletionPolicy: Snapshot
+    Properties:
+      DBInstanceIdentifier: !Ref DBInstanceIdentifier
+      DBName: !Ref DBName
+      Engine: postgres
+      EngineVersion: !Ref EngineVersion
+      MasterUsername: !Ref MasterUsername
+      MasterUserPassword: !Ref MasterUserPassword
+      DBInstanceClass: !Ref DBInstanceClass
+      AllocatedStorage: !Ref AllocatedStorage
+      StorageType: gp3
+      StorageEncrypted: !Ref StorageEncrypted
+      DBSubnetGroupName: !Ref DBSubnetGroup
+      VPCSecurityGroups:
+        - !Ref RDSSecurityGroup
+      PubliclyAccessible: !Ref PubliclyAccessible
+      BackupRetentionPeriod: !Ref BackupRetentionPeriod
+      MultiAZ: !Ref MultiAZ
+      AutoMinorVersionUpgrade: true
+      EnablePerformanceInsights: false
+      Tags:
+        - Key: Name
+          Value: !Sub '${AWS::StackName}-database'
+        - Key: Application
+          Value: SmartHomeCloud
+
+Conditions:
+  CreateVPC: !Equals [!Ref UseExistingVPC, 'false']
+
+Outputs:
+  DBEndpoint:
+    Description: RDS instance endpoint
+    Value: !GetAtt DBInstance.Endpoint.Address
+    Export:
+      Name: !Sub '${AWS::StackName}-endpoint'
+  
+  DBPort:
+    Description: RDS instance port
+    Value: !GetAtt DBInstance.Endpoint.Port
+    Export:
+      Name: !Sub '${AWS::StackName}-port'
+  
+  DatabaseURL:
+    Description: PostgreSQL connection string (without password)
+    Value: !Sub 
+      - 'postgresql://${Username}:PASSWORD@${Endpoint}:${Port}/${DBName}?sslmode=require'
+      - Username: !Ref MasterUsername
+        Endpoint: !GetAtt DBInstance.Endpoint.Address
+        Port: !GetAtt DBInstance.Endpoint.Port
+        DBName: !Ref DBName
+    Export:
+      Name: !Sub '${AWS::StackName}-connection-string'
+  
+  SecurityGroupId:
+    Description: RDS security group ID
+    Value: !Ref RDSSecurityGroup
+    Export:
+      Name: !Sub '${AWS::StackName}-security-group'
+
