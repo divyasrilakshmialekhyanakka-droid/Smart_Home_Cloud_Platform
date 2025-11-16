@@ -106,17 +106,26 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(404).json({ message: "User not found" });
       }
 
-      // Hash password if provided
+      // Merge updates with existing user data
+      const updatedData: any = {
+        id: existingUser.id,
+        email: updates.email !== undefined ? updates.email : existingUser.email,
+        firstName: updates.firstName !== undefined ? updates.firstName : existingUser.firstName,
+        lastName: updates.lastName !== undefined ? updates.lastName : existingUser.lastName,
+        role: updates.role !== undefined ? updates.role : existingUser.role,
+        authProvider: existingUser.authProvider || "local",
+        profileImageUrl: updates.profileImageUrl !== undefined ? updates.profileImageUrl : existingUser.profileImageUrl,
+      };
+
+      // Hash password if provided, otherwise keep existing password
       if (updates.password) {
-        updates.password = await bcrypt.hash(updates.password, 10);
+        updatedData.password = await bcrypt.hash(updates.password, 10);
+      } else {
+        updatedData.password = existingUser.password;
       }
 
-      // Update user using upsertUser (which handles updates)
-      const updatedUser = await storage.upsertUser({
-        id,
-        ...updates,
-        email: updates.email || existingUser.email,
-      });
+      // Update user using upsertUser
+      const updatedUser = await storage.upsertUser(updatedData);
 
       res.json(updatedUser);
     } catch (error) {
