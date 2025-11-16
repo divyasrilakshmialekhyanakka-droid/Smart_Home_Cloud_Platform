@@ -185,13 +185,6 @@ export default function AudioDetection() {
               )}
             </div>
 
-            <Alert>
-              <Mic className="h-4 w-4" />
-              <AlertDescription className="text-sm">
-                <strong>Tip:</strong> Use filenames with keywords like "dog", "scream", "glass", "baby", etc. 
-                to simulate different sound detections.
-              </AlertDescription>
-            </Alert>
 
             <Button
               onClick={() => analyzeMutation.mutate()}
