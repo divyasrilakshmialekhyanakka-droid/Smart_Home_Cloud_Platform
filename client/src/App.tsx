@@ -11,6 +11,7 @@ import NotFound from "@/pages/not-found";
 import LoginPage from "@/pages/login";
 import HomeownerDashboard from "@/pages/homeowner-dashboard";
 import CloudStaffDashboard from "@/pages/cloud-staff-dashboard";
+import IoTTeamDashboard from "@/pages/iot-team-dashboard";
 import AlertsPage from "@/pages/alerts";
 import SurveillancePage from "@/pages/surveillance";
 import DeviceManagement from "@/pages/device-management";
@@ -47,6 +48,8 @@ function Router() {
   const DashboardComponent =
     user?.role === "cloud_staff"
       ? CloudStaffDashboard
+      : user?.role === "iot_team"
+      ? IoTTeamDashboard
       : HomeownerDashboard;
 
   return (
