@@ -14,6 +14,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Settings, Shield, Users, Building2 } from "lucide-react";
 import { useState } from "react";
 import { useToast } from "@/hooks/use-toast";
+import { Link } from "wouter";
 
 export default function SystemConfiguration() {
   const { toast } = useToast();
@@ -22,6 +23,15 @@ export default function SystemConfiguration() {
   const [locale, setLocale] = useState("en-US");
   const [sessionTimeout, setSessionTimeout] = useState("60");
   const [dataRetention, setDataRetention] = useState(true);
+  
+  // Security controls state
+  const [twoFactorAuth, setTwoFactorAuth] = useState(false);
+  const [rateLimiting, setRateLimiting] = useState(true);
+  const [auditLogging, setAuditLogging] = useState(true);
+  
+  // Multi-tenancy state
+  const [crossTenantAnalytics, setCrossTenantAnalytics] = useState(false);
+  const [storageQuota, setStorageQuota] = useState("100GB");
 
   const handleSave = () => {
     toast({
@@ -165,7 +175,19 @@ export default function SystemConfiguration() {
                     Require 2FA for all admin users
                   </p>
                 </div>
-                <Switch data-testid="switch-2fa" />
+                <Switch 
+                  checked={twoFactorAuth}
+                  onCheckedChange={(checked) => {
+                    setTwoFactorAuth(checked);
+                    toast({
+                      title: checked ? "2FA Enabled" : "2FA Disabled",
+                      description: checked 
+                        ? "Two-factor authentication is now required for admin users"
+                        : "Two-factor authentication has been disabled",
+                    });
+                  }}
+                  data-testid="switch-2fa" 
+                />
               </div>
 
               <div className="flex items-center justify-between p-4 border rounded-md">
@@ -175,7 +197,19 @@ export default function SystemConfiguration() {
                     Limit API requests per user (30-60 requests/min)
                   </p>
                 </div>
-                <Switch defaultChecked data-testid="switch-rate-limiting" />
+                <Switch 
+                  checked={rateLimiting}
+                  onCheckedChange={(checked) => {
+                    setRateLimiting(checked);
+                    toast({
+                      title: checked ? "Rate Limiting Enabled" : "Rate Limiting Disabled",
+                      description: checked 
+                        ? "API rate limiting is now active"
+                        : "API rate limiting has been disabled",
+                    });
+                  }}
+                  data-testid="switch-rate-limiting" 
+                />
               </div>
 
               <div className="flex items-center justify-between p-4 border rounded-md">
@@ -185,7 +219,19 @@ export default function SystemConfiguration() {
                     Log all user actions and system events
                   </p>
                 </div>
-                <Switch defaultChecked data-testid="switch-audit-logging" />
+                <Switch 
+                  checked={auditLogging}
+                  onCheckedChange={(checked) => {
+                    setAuditLogging(checked);
+                    toast({
+                      title: checked ? "Audit Logging Enabled" : "Audit Logging Disabled",
+                      description: checked 
+                        ? "All user actions and system events are now being logged"
+                        : "Audit logging has been disabled",
+                    });
+                  }}
+                  data-testid="switch-audit-logging" 
+                />
               </div>
 
               <div className="flex items-center justify-between p-4 border rounded-md">
@@ -238,8 +284,15 @@ export default function SystemConfiguration() {
                       </div>
                       <p className="text-sm text-muted-foreground">{roleInfo.description}</p>
                     </div>
-                    <Button variant="outline" size="sm" data-testid={`button-edit-role-${i}`}>
-                      Edit
+                    <Button 
+                      variant="outline" 
+                      size="sm" 
+                      asChild
+                      data-testid={`button-edit-role-${i}`}
+                    >
+                      <Link href="/users">
+                        Edit
+                      </Link>
                     </Button>
                   </div>
                 ))}
@@ -274,12 +327,29 @@ export default function SystemConfiguration() {
                     Allow aggregated analytics across multiple houses
                   </p>
                 </div>
-                <Switch data-testid="switch-cross-tenant" />
+                <Switch 
+                  checked={crossTenantAnalytics}
+                  onCheckedChange={(checked) => {
+                    setCrossTenantAnalytics(checked);
+                    toast({
+                      title: checked ? "Cross-Tenant Analytics Enabled" : "Cross-Tenant Analytics Disabled",
+                      description: checked 
+                        ? "Analytics can now be aggregated across multiple houses"
+                        : "Cross-tenant analytics have been disabled",
+                    });
+                  }}
+                  data-testid="switch-cross-tenant" 
+                />
               </div>
 
               <div className="space-y-2">
                 <Label>Default Storage Quota (per tenant)</Label>
-                <Input placeholder="e.g., 100GB" data-testid="input-storage-quota" />
+                <Input 
+                  value={storageQuota}
+                  onChange={(e) => setStorageQuota(e.target.value)}
+                  placeholder="e.g., 100GB" 
+                  data-testid="input-storage-quota" 
+                />
               </div>
             </CardContent>
           </Card>

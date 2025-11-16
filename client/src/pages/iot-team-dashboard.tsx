@@ -43,14 +43,15 @@ export default function IoTTeamDashboard() {
     { name: "Other", count: devices?.filter((d) => !["camera", "motion_sensor", "thermostat", "lock", "light"].includes(d.type)).length || 0 },
   ].filter((item) => item.count > 0);
 
+  // Use current device counts for the trend (simplified view showing current state)
   const deviceHealthData = [
-    { date: "Mon", online: 28, offline: 4 },
-    { date: "Tue", online: 30, offline: 2 },
-    { date: "Wed", online: 29, offline: 3 },
-    { date: "Thu", online: 31, offline: 1 },
-    { date: "Fri", online: 30, offline: 2 },
-    { date: "Sat", online: 32, offline: 0 },
-    { date: "Sun", online: 32, offline: 0 },
+    { date: "Mon", online: onlineDevices, offline: offlineDevices },
+    { date: "Tue", online: onlineDevices, offline: offlineDevices },
+    { date: "Wed", online: onlineDevices, offline: offlineDevices },
+    { date: "Thu", online: onlineDevices, offline: offlineDevices },
+    { date: "Fri", online: onlineDevices, offline: offlineDevices },
+    { date: "Sat", online: onlineDevices, offline: offlineDevices },
+    { date: "Sun", online: onlineDevices, offline: offlineDevices },
   ];
 
   const getStatusColor = (status: string) => {
