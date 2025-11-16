@@ -4,19 +4,12 @@ import type { RequestHandler } from "express";
 export function requireRole(...allowedRoles: string[]): RequestHandler {
   return async (req: any, res, next) => {
     try {
-      if (!req.user || !req.user.claims) {
+      // With custom auth, req.user is the full user object from passport
+      if (!req.user) {
         return res.status(401).json({ message: "Unauthorized" });
       }
 
-      const userId = req.user.claims.sub;
-      
-      // Get user from storage to check role
-      const { storage } = await import("./storage");
-      const user = await storage.getUser(userId);
-
-      if (!user) {
-        return res.status(401).json({ message: "User not found" });
-      }
+      const user = req.user;
 
       if (!allowedRoles.includes(user.role)) {
         return res.status(403).json({ 

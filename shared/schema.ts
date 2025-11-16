@@ -27,14 +27,15 @@ export const sessions = pgTable(
 );
 
 // ===== USERS TABLE =====
-// (IMPORTANT) This table is mandatory for Replit Auth, don't drop it.
 export const users = pgTable("users", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
-  email: varchar("email").unique(),
+  email: varchar("email").unique().notNull(),
+  password: varchar("password"), // Hashed password for email/password auth (null for OAuth users)
   firstName: varchar("first_name"),
   lastName: varchar("last_name"),
   profileImageUrl: varchar("profile_image_url"),
   role: varchar("role", { enum: ["homeowner", "iot_team", "cloud_staff"] }).notNull().default("homeowner"),
+  authProvider: varchar("auth_provider"), // 'local', 'google', 'github', 'twitter', 'apple'
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 });
@@ -48,6 +49,8 @@ export const insertUserSchema = createInsertSchema(users).omit({
   firstName: z.string().min(1, "First name is required"),
   lastName: z.string().min(1, "Last name is required"),
   role: z.enum(["homeowner", "iot_team", "cloud_staff"]),
+  password: z.string().min(6, "Password must be at least 6 characters").optional(),
+  authProvider: z.enum(["local", "google", "github", "twitter", "apple"]).optional(),
 });
 
 export type InsertUser = z.infer<typeof insertUserSchema>;
