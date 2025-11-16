@@ -11,6 +11,7 @@ import {
   maintenanceRecords,
   insertMaintenanceRecordSchema,
   insertUserSchema,
+  updateUserSchema,
   audioDetections,
   alerts,
   houses,
@@ -98,7 +99,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.patch('/api/users/:id', isAuthenticated, requireRole('cloud_staff'), async (req: any, res) => {
     try {
       const { id } = req.params;
-      const updates = req.body;
+      const currentUserId = req.user.id;
+      
+      // Validate updates using schema
+      const validatedUpdates = updateUserSchema.parse(req.body);
 
       // Check if user exists
       const existingUser = await storage.getUser(id);
@@ -106,20 +110,56 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(404).json({ message: "User not found" });
       }
 
-      // Merge updates with existing user data
+      // Security: Prevent users from changing their own role (privilege escalation prevention)
+      if (validatedUpdates.role !== undefined && id === currentUserId) {
+        return res.status(403).json({ 
+          message: "You cannot change your own role for security reasons" 
+        });
+      }
+
+      // Security: Prevent promotion TO cloud_staff or demotion FROM cloud_staff
+      // This prevents privilege escalation while allowing cloud_staff to manage other roles
+      // Future enhancement: add super-admin role for cloud_staff management
+      const isPromotingToCloudStaff = validatedUpdates.role === 'cloud_staff' && existingUser.role !== 'cloud_staff';
+      const isDemotingFromCloudStaff = existingUser.role === 'cloud_staff' && validatedUpdates.role !== 'cloud_staff';
+      
+      if (validatedUpdates.role !== undefined && (isPromotingToCloudStaff || isDemotingFromCloudStaff)) {
+        // Log the blocked attempt for audit trail using correct schema
+        await db.insert(userConfigLogs).values({
+          userId: currentUserId,
+          configKey: 'role_change_blocked',
+          oldValue: JSON.stringify({ 
+            executor: req.user.email,
+            targetUserId: id,
+            targetUserEmail: existingUser.email,
+            currentRole: existingUser.role 
+          }),
+          newValue: JSON.stringify({ 
+            attemptedRole: validatedUpdates.role,
+            reason: isPromotingToCloudStaff ? 'promotion_to_cloud_staff_blocked' : 'demotion_from_cloud_staff_blocked',
+            requestIp: req.ip
+          }),
+        });
+        
+        return res.status(403).json({ 
+          message: "Cannot promote to or demote from cloud_staff role. Contact system administrator." 
+        });
+      }
+
+      // Merge validated updates with existing user data
       const updatedData: any = {
         id: existingUser.id,
-        email: updates.email !== undefined ? updates.email : existingUser.email,
-        firstName: updates.firstName !== undefined ? updates.firstName : existingUser.firstName,
-        lastName: updates.lastName !== undefined ? updates.lastName : existingUser.lastName,
-        role: updates.role !== undefined ? updates.role : existingUser.role,
+        email: validatedUpdates.email !== undefined ? validatedUpdates.email : existingUser.email,
+        firstName: validatedUpdates.firstName !== undefined ? validatedUpdates.firstName : existingUser.firstName,
+        lastName: validatedUpdates.lastName !== undefined ? validatedUpdates.lastName : existingUser.lastName,
+        role: validatedUpdates.role !== undefined ? validatedUpdates.role : existingUser.role,
         authProvider: existingUser.authProvider || "local",
-        profileImageUrl: updates.profileImageUrl !== undefined ? updates.profileImageUrl : existingUser.profileImageUrl,
+        profileImageUrl: validatedUpdates.profileImageUrl !== undefined ? validatedUpdates.profileImageUrl : existingUser.profileImageUrl,
       };
 
       // Hash password if provided, otherwise keep existing password
-      if (updates.password) {
-        updatedData.password = await bcrypt.hash(updates.password, 10);
+      if (validatedUpdates.password) {
+        updatedData.password = await bcrypt.hash(validatedUpdates.password, 10);
       } else {
         updatedData.password = existingUser.password;
       }
@@ -130,6 +170,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.json(updatedUser);
     } catch (error) {
       console.error("Error updating user:", error);
+      if (error instanceof ZodError) {
+        return res.status(400).json({ 
+          message: "Validation failed", 
+          errors: error.errors 
+        });
+      }
       res.status(500).json({ message: "Failed to update user" });
     }
   });

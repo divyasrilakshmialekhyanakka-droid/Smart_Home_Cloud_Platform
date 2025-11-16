@@ -53,7 +53,17 @@ export const insertUserSchema = createInsertSchema(users).omit({
   authProvider: z.enum(["local", "google", "github", "twitter", "apple"]).optional(),
 });
 
+export const updateUserSchema = z.object({
+  email: z.string().email("Must be a valid email address").optional(),
+  firstName: z.string().min(1, "First name is required").optional(),
+  lastName: z.string().min(1, "Last name is required").optional(),
+  role: z.enum(["homeowner", "iot_team", "cloud_staff"]).optional(),
+  password: z.string().min(6, "Password must be at least 6 characters").optional(),
+  profileImageUrl: z.string().url().optional().nullable(),
+});
+
 export type InsertUser = z.infer<typeof insertUserSchema>;
+export type UpdateUser = z.infer<typeof updateUserSchema>;
 export type UpsertUser = typeof users.$inferInsert;
 export type User = typeof users.$inferSelect;
 
