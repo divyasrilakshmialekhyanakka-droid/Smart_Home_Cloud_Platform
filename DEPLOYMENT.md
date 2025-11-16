@@ -35,8 +35,8 @@
    - **Disable**: Storage autoscaling, Multi-AZ, Performance Insights, Enhanced Monitoring
    - Backup: 0-1 days
 5. **Connectivity**: 
-   - Public access: No
-   - Security group: Create new `smarthome-rds-sg`
+   - **Option A (Recommended - More Secure)**: Public access: No, Security group: Create new `smarthome-rds-sg`
+   - **Option B (Simpler - Less Secure)**: Public access: Yes (easier setup, but less secure)
 6. Click "Create database"
 7. **Wait 5-15 minutes**, then note the **Endpoint**
 
@@ -44,6 +44,11 @@
 ```
 postgresql://postgres:Password@Endpoint:5432/postgres?sslmode=require
 ```
+
+**⚠️ Security Note**: If you enabled public access, your database is accessible from the internet. Make sure to:
+- Use a strong password
+- Enable SSL (sslmode=require in connection string)
+- Consider restricting access later for production
 
 ---
 
@@ -67,11 +72,15 @@ postgresql://postgres:Password@Endpoint:5432/postgres?sslmode=require
 
 ## Step 4: Configure Security Groups
 
+**Only needed if you chose "Public access: No" in Step 2**
+
 1. EC2 → Security Groups → `smarthome-rds-sg`
 2. Edit inbound rules → Add rule
 3. Type: PostgreSQL, Port: 5432
 4. Source: Security group → Select `smarthome-ec2-sg`
 5. Save rules
+
+**If you enabled public access**: Skip this step - RDS is already accessible from anywhere (less secure but simpler)
 
 ---
 
