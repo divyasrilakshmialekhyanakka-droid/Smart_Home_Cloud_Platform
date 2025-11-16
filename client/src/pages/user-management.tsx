@@ -40,6 +40,7 @@ import type { User } from "@shared/schema";
 
 const addUserFormSchema = z.object({
   email: z.string().email("Please enter a valid email address"),
+  password: z.string().min(6, "Password must be at least 6 characters"),
   firstName: z.string().min(1, "First name is required"),
   lastName: z.string().min(1, "Last name is required"),
   role: z.enum(["homeowner", "iot_team", "cloud_staff"]),
@@ -47,6 +48,7 @@ const addUserFormSchema = z.object({
 
 const editUserFormSchema = z.object({
   email: z.string().email("Please enter a valid email address"),
+  password: z.string().min(6, "Password must be at least 6 characters").optional(),
   firstName: z.string().min(1, "First name is required"),
   lastName: z.string().min(1, "Last name is required"),
   role: z.enum(["homeowner", "iot_team", "cloud_staff"]),
@@ -71,6 +73,7 @@ export default function UserManagement() {
     resolver: zodResolver(addUserFormSchema),
     defaultValues: {
       email: "",
+      password: "",
       firstName: "",
       lastName: "",
       role: "homeowner",
@@ -81,6 +84,7 @@ export default function UserManagement() {
     resolver: zodResolver(editUserFormSchema),
     defaultValues: {
       email: "",
+      password: "",
       firstName: "",
       lastName: "",
       role: "homeowner",
@@ -111,12 +115,16 @@ export default function UserManagement() {
 
   const updateUserMutation = useMutation({
     mutationFn: async (data: EditUserFormValues & { id: string }) => {
-      return await apiRequest("PATCH", `/api/users/${data.id}`, {
+      const payload: any = {
         email: data.email,
         firstName: data.firstName,
         lastName: data.lastName,
         role: data.role,
-      });
+      };
+      if (data.password) {
+        payload.password = data.password;
+      }
+      return await apiRequest("PATCH", `/api/users/${data.id}`, payload);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/users"] });
@@ -224,7 +232,23 @@ export default function UserManagement() {
                         <Input placeholder="user@example.com" {...field} data-testid="input-email" />
                       </FormControl>
                       <FormDescription>
-                        The user's email address (must match their Replit account)
+                        The user's email address for login
+                      </FormDescription>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={addUserForm.control}
+                  name="password"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Password</FormLabel>
+                      <FormControl>
+                        <Input type="password" placeholder="Password (min 6 characters)" {...field} data-testid="input-password" />
+                      </FormControl>
+                      <FormDescription>
+                        Password for email/password login
                       </FormDescription>
                       <FormMessage />
                     </FormItem>
@@ -330,6 +354,22 @@ export default function UserManagement() {
                     <FormControl>
                       <Input placeholder="user@example.com" {...field} data-testid="input-edit-email" />
                     </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={editUserForm.control}
+                name="password"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Password</FormLabel>
+                    <FormControl>
+                      <Input type="password" placeholder="Leave blank to keep current" {...field} data-testid="input-edit-password" />
+                    </FormControl>
+                    <FormDescription>
+                      Only fill if you want to change the password
+                    </FormDescription>
                     <FormMessage />
                   </FormItem>
                 )}

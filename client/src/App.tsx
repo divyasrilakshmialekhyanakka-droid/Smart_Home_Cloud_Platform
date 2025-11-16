@@ -8,7 +8,7 @@ import { useAuth } from "@/hooks/useAuth";
 import { AppSidebar } from "@/components/app-sidebar";
 import { Header } from "@/components/header";
 import NotFound from "@/pages/not-found";
-import Landing from "@/pages/landing";
+import LoginPage from "@/pages/login";
 import HomeownerDashboard from "@/pages/homeowner-dashboard";
 import CloudStaffDashboard from "@/pages/cloud-staff-dashboard";
 import AlertsPage from "@/pages/alerts";
@@ -37,8 +37,8 @@ function Router() {
   if (!isAuthenticated) {
     return (
       <Switch>
-        <Route path="/" component={Landing} />
-        <Route component={Landing} />
+        <Route path="/" component={LoginPage} />
+        <Route component={LoginPage} />
       </Switch>
     );
   }

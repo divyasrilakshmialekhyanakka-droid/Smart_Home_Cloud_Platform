@@ -3,6 +3,7 @@ import { createServer, type Server } from "http";
 import { storage } from "./storage";
 import { setupCustomAuth } from "./customAuth";
 import { requireRole, canAccessHouse } from "./middleware";
+import bcrypt from "bcryptjs";
 import { 
   insertDeviceSchema, 
   insertAlertSchema, 
@@ -68,11 +69,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(409).json({ message: "User with this email already exists" });
       }
 
-      // Create user with a collision-safe UUID (will be replaced on OIDC login)
-      const userId = `pre-${randomUUID()}`;
-      const user = await storage.upsertUser({
-        id: userId,
+      // Hash password if provided
+      let hashedPassword = validatedData.password;
+      if (validatedData.password) {
+        hashedPassword = await bcrypt.hash(validatedData.password, 10);
+      }
+
+      // Create user
+      const user = await storage.createUser({
         ...validatedData,
+        password: hashedPassword,
+        authProvider: "local",
       });
 
       res.status(201).json(user);
@@ -88,10 +95,40 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  app.patch('/api/users/:id', isAuthenticated, requireRole('cloud_staff'), async (req: any, res) => {
+    try {
+      const { id } = req.params;
+      const updates = req.body;
+
+      // Check if user exists
+      const existingUser = await storage.getUser(id);
+      if (!existingUser) {
+        return res.status(404).json({ message: "User not found" });
+      }
+
+      // Hash password if provided
+      if (updates.password) {
+        updates.password = await bcrypt.hash(updates.password, 10);
+      }
+
+      // Update user using upsertUser (which handles updates)
+      const updatedUser = await storage.upsertUser({
+        id,
+        ...updates,
+        email: updates.email || existingUser.email,
+      });
+
+      res.json(updatedUser);
+    } catch (error) {
+      console.error("Error updating user:", error);
+      res.status(500).json({ message: "Failed to update user" });
+    }
+  });
+
   // ===== HOUSE ROUTES =====
   app.post('/api/houses', isAuthenticated, async (req: any, res) => {
     try {
-      const userId = req.user.claims.sub;
+      const userId = req.user.id;
       const validatedData = insertHouseSchema.parse({
         ...req.body,
         ownerId: userId,
@@ -106,7 +143,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.get('/api/houses', isAuthenticated, async (req: any, res) => {
     try {
-      const userId = req.user.claims.sub;
+      const userId = req.user.id;
       const user = await storage.getUser(userId);
       
       if (user?.role === 'cloud_staff' || user?.role === 'iot_team') {
@@ -143,7 +180,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.get('/api/devices', isAuthenticated, async (req: any, res) => {
     try {
-      const userId = req.user.claims.sub;
+      const userId = req.user.id;
       const user = await storage.getUser(userId);
 
       if (!user) {
@@ -169,7 +206,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.get('/api/devices/cameras', isAuthenticated, async (req: any, res) => {
     try {
-      const userId = req.user.claims.sub;
+      const userId = req.user.id;
       const user = await storage.getUser(userId);
 
       if (!user) {
@@ -195,7 +232,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.get('/api/devices/:id', isAuthenticated, async (req: any, res) => {
     try {
-      const userId = req.user.claims.sub;
+      const userId = req.user.id;
       const user = await storage.getUser(userId);
       const device = await storage.getDevice(req.params.id);
 
@@ -241,7 +278,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // ===== ALERT ROUTES =====
   app.post('/api/alerts', isAuthenticated, async (req: any, res) => {
     try {
-      const userId = req.user.claims.sub;
+      const userId = req.user.id;
       const user = await storage.getUser(userId);
       const validatedData = insertAlertSchema.parse(req.body);
 
@@ -267,7 +304,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.get('/api/alerts', isAuthenticated, async (req: any, res) => {
     try {
-      const userId = req.user.claims.sub;
+      const userId = req.user.id;
       const user = await storage.getUser(userId);
 
       if (!user) {
@@ -293,7 +330,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.get('/api/alerts/recent', isAuthenticated, async (req: any, res) => {
     try {
-      const userId = req.user.claims.sub;
+      const userId = req.user.id;
       const user = await storage.getUser(userId);
       const limit = parseInt(req.query.limit as string) || 10;
 
@@ -320,7 +357,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.post('/api/alerts/:id/acknowledge', isAuthenticated, async (req: any, res) => {
     try {
-      const userId = req.user.claims.sub;
+      const userId = req.user.id;
       const user = await storage.getUser(userId);
       const alert = await storage.getAlert(req.params.id);
 
@@ -346,7 +383,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.post('/api/alerts/:id/resolve', isAuthenticated, async (req: any, res) => {
     try {
-      const userId = req.user.claims.sub;
+      const userId = req.user.id;
       const user = await storage.getUser(userId);
       const alert = await storage.getAlert(req.params.id);
 
@@ -372,7 +409,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.post('/api/alerts/:id/dismiss', isAuthenticated, async (req: any, res) => {
     try {
-      const userId = req.user.claims.sub;
+      const userId = req.user.id;
       const user = await storage.getUser(userId);
       const alert = await storage.getAlert(req.params.id);
 
@@ -488,7 +525,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get('/api/database/export', isAuthenticated, requireRole('cloud_staff'), async (req: any, res) => {
     try {
       const type = req.query.type as string || 'all';
-      const userId = req.user.claims.sub;
+      const userId = req.user.id;
       const limit = parseInt(req.query.limit as string) || 10000; // Default max 10k records per table
       
       // Validate type parameter
