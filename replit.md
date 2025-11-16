@@ -42,10 +42,11 @@ Preferred communication style: Simple, everyday language.
 **Session Management**: Express sessions stored in PostgreSQL using connect-pg-simple for persistence across server restarts
 
 **Authentication Flow**: 
-- Replit OpenID Connect (OIDC) integration via Passport.js
-- OAuth2 authorization code flow with PKCE
-- Token refresh mechanism for long-lived sessions
-- Mandatory user/session tables for Replit Auth compatibility
+- Custom email/password authentication using Passport.js with passport-local strategy
+- OAuth2 integration for Google, GitHub, X/Twitter, and Apple via respective Passport strategies
+- Bcrypt password hashing (10 salt rounds) for secure credential storage
+- Session-based authentication with PostgreSQL session store (connect-pg-simple)
+- Password management integrated into user administration interface
 
 **Authorization Model**:
 - Role-based middleware (`requireRole`) enforces access control at route level
@@ -81,6 +82,14 @@ Preferred communication style: Simple, everyday language.
 - Device mutations restricted to technical staff roles
 - User management completely restricted to cloud staff
 - Database operations restricted to cloud staff and IoT team
+- Privilege escalation prevention:
+  - Users cannot change their own roles (self-escalation blocked)
+  - Promotions to cloud_staff role are blocked (only super-admin can create cloud_staff users)
+  - Demotions from cloud_staff role are blocked (prevents unauthorized removal of admins)
+  - Cloud_staff users can manage homeowner/iot_team role assignments
+  - All blocked role changes logged to userConfigLogs for audit trail
+- Input validation using Zod schemas prevents injection attacks
+- Session cookies configured with secure flags in production (sameSite: 'lax', httpOnly: true)
 
 **API Structure**:
 - `/api/auth/*` - Authentication endpoints (login, logout, user profile)
@@ -98,9 +107,9 @@ Preferred communication style: Simple, everyday language.
 
 **Schema Design**:
 
-**Users Table**: Stores user profiles with role-based access levels (homeowner, iot_team, cloud_staff). Mandatory for Replit Auth integration.
+**Users Table**: Stores user profiles with role-based access levels (homeowner, iot_team, cloud_staff), email/password credentials (bcrypt-hashed), and OAuth provider information (local, google, github, twitter, apple).
 
-**Sessions Table**: Stores session data for authentication persistence. Mandatory for Replit Auth.
+**Sessions Table**: Stores session data for authentication persistence across server restarts using connect-pg-simple.
 
 **Houses Table**: Represents physical houses with owner relationships, location data, and property details (square footage, bedrooms, bathrooms).
 
@@ -129,9 +138,11 @@ Preferred communication style: Simple, everyday language.
 
 **Database Service**: Neon serverless PostgreSQL with WebSocket support for connection pooling
 
-**Authentication Provider**: Replit OpenID Connect (OIDC) for user authentication
-- Issuer URL: `https://replit.com/oidc` (configurable via `ISSUER_URL`)
-- Requires `REPL_ID`, `SESSION_SECRET`, and OpenID client credentials
+**Authentication Providers**: 
+- Custom local authentication with email/password
+- OAuth2 providers: Google, GitHub, X/Twitter, Apple (configurable via environment variables)
+- Session management requires `SESSION_SECRET` environment variable
+- OAuth providers require respective client IDs and secrets (optional, falls back to email/password if not configured)
 
 **Deployment Target**: Amazon EC2 (per project requirements)
 
